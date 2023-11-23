@@ -1,0 +1,9 @@
+data
+local*
+outputs*
+__pycache__
+.pyc
+.vscode
+datasets
+backup
+*.backup*
