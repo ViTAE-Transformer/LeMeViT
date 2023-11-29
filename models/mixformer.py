@@ -116,9 +116,7 @@ class Attention(nn.Module):
 
         return x
 
-class MixAttention(nn.Module):
-    """Patch-to-Cluster Attention Layer"""
-    
+class StandardAttention(nn.Module):
     def __init__(
         self,
         dim,
@@ -151,52 +149,195 @@ class MixAttention(nn.Module):
             k = self.k(x)  
             v = self.v(x)
 
-            q = rearrange(q, "B N (h d) -> B N h d", h=self.num_heads)
-            k = rearrange(k, "B N (h d) -> B N h d", h=self.num_heads)
-            v = rearrange(v, "B N (h d) -> B N h d", h=self.num_heads)
+            q = rearrange(q, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
+            k = rearrange(k, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
+            v = rearrange(v, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
 
             x = xops.memory_efficient_attention(q, k, v)  # B N h d
-            x = rearrange(x, "B N h d -> B N (h d)")
+            x = rearrange(x, "B N h d -> B N (h d)").contiguous()
 
             x = self.proj(x)
         else:
-            x = rearrange(x, "B N C -> N B C")
-
-            x = rearrange(x, 'n h w c -> n (h w) c')
-            _, H, W, _ = x.size()
-            #######################################
             B, N, C = x.shape        
             q = self.q(x)  # B N C
-            k = self.k(x)  # B N C
+            k = self.k(x)  
             v = self.v(x)
-            q = rearrange(q, "B N (h d) -> B N h d", h=self.num_heads)
-            k = rearrange(k, "B N (h d) -> B N h d", h=self.num_heads)
-            v = rearrange(v, "B N (h d) -> B N h d", h=self.num_heads)
+            
+            q = rearrange(q, "B N (h d) -> B h N d", h=self.num_heads).contiguous()
+            k = rearrange(k, "B N (h d) -> B h N d", h=self.num_heads).contiguous()
+            v = rearrange(v, "B N (h d) -> B h N d", h=self.num_heads).contiguous()
 
-            attn = (q @ k.transpose(-2, -1)) * self.scale
+            attn = (q @ k.transpose(-2, -1).contiguous()) * self.scale
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
 
-            x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+            x = (attn @ v)
+            x = rearrange(x, "B h N d -> B N (h d)").contiguous()
             x = self.proj(x)
             x = self.proj_drop(x)
-            #######################################
-
-            x = rearrange(x, 'n (h w) c -> n h w c', h=H, w=W)
-
-            x = rearrange(x, "N B C -> B N C")
-
-            if not self.training:
-                attn = self.attn_viz(attn)
-
-        x = self.proj_drop(x)
-
         return x
 
+class MixAttention(nn.Module):
+    
+    def __init__(
+        self,
+        dim,
+        num_heads,
+        scale = None,
+        bias = False,
+        attn_drop=0.0,
+        proj_drop=0.0,
+        **kwargs,
+    ):
+        super().__init__()
+        assert dim % num_heads == 0, f"dim {dim} not divisible by num_heads {num_heads}"
+        self.num_heads = num_heads
+        self.scale = scale or dim**(-0.5)
+
+        self.use_xformers = has_xformers and (dim // num_heads) % 32 == 0
+
+        self.q1 = nn.Linear(dim, dim)
+        self.k1 = nn.Linear(dim, dim)
+        self.v1 = nn.Linear(dim, dim)
+        self.q2 = nn.Linear(dim, dim)
+        self.k2 = nn.Linear(dim, dim)
+        self.v2 = nn.Linear(dim, dim)
+        self.attn_drop = nn.Dropout(attn_drop)
+
+        self.proj1 = nn.Linear(dim, dim)
+        self.proj2 = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+        self.attn_viz = nn.Identity() 
+
+    def forward(self, x, c):
+        B, N, C = x.shape        
+        B, M, _ = c.shape    
+        if self.use_xformers:
+            q1 = self.q1(x)  # B N C
+            k1 = self.k1(x)
+            v1 = self.v1(x)
+            q2 = self.q2(c)
+            k2 = self.k2(c)  # B M C
+            v2 = self.v2(c)
+            
+            q1 = rearrange(q1, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
+            k1 = rearrange(k1, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
+            v1 = rearrange(v1, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
+            q2 = rearrange(q2, "B M (h d) -> B M h d", h=self.num_heads).contiguous()
+            k2 = rearrange(k2, "B M (h d) -> B M h d", h=self.num_heads).contiguous()
+            v2 = rearrange(v2, "B M (h d) -> B M h d", h=self.num_heads).contiguous()
+            
+            scale_x = math.log(M, N) * self.scale
+            scale_c = math.log(N, N) * self.scale
+
+            x = xops.memory_efficient_attention(q1, k2, v2, scale=scale_x)  # B N h d
+            c = xops.memory_efficient_attention(q2, k1, v1, scale=scale_c)
+            
+            x = rearrange(x, "B N h d -> B N (h d)")
+            c = rearrange(c, "B M h d -> B M (h d)")
+
+            x = self.proj1(x)
+            c = self.proj2(c)
+            
+        else:
+            q = self.q(x)  # B N C
+            k = self.k(c)  # B M C
+            v1 = self.v1(x)
+            v2 = self.v2(c)
+            
+            q = rearrange(q, "B N (h d) -> B h N d", h=self.num_heads).contiguous()
+            k = rearrange(k, "B M (h d) -> B h M d", h=self.num_heads).contiguous()
+            v1 = rearrange(v1, "B N (h d) -> B h N d", h=self.num_heads).contiguous()
+            v2 = rearrange(v2, "B M (h d) -> B h M d", h=self.num_heads).contiguous()
+
+            attn = (q @ k.transpose(-2, -1).contiguous()) * self.scale
+            attn1 = (attn*math.log(M)).transpose(-2,-1).contiguous().softmax(dim=-1)
+            attn1 = self.attn_drop(attn1)
+
+            attn2 = (attn*math.log(N)).softmax(dim=-1)
+            attn2 = self.attn_drop(attn2)
+
+            c = (attn1 @ v1)
+            c = rearrange(c, "B h M d -> B M (h d)").contiguous()
+            c = self.proj1(c)
+            c = self.proj_drop(c)
+
+            x = (attn2 @ v2)
+            x = rearrange(x, "B h N d -> B N (h d)").contiguous()
+            x = self.proj2(x)
+            x = self.proj_drop(x)
+
+        return x, c
+
+class StemAttention(nn.Module):
+    def __init__(
+        self,
+        dim,
+        num_heads,
+        scale = None,
+        bias = False,
+        attn_drop=0.0,
+        proj_drop=0.0,
+        **kwargs,
+    ):
+        super().__init__()
+        assert dim % num_heads == 0, f"dim {dim} not divisible by num_heads {num_heads}"
+        self.num_heads = num_heads
+
+        self.use_xformers = has_xformers and (dim // num_heads) % 32 == 0
+
+        self.q = nn.Linear(dim, dim)
+        self.k = nn.Linear(dim, dim)
+        self.v = nn.Linear(dim, dim)
+        self.attn_drop = attn_drop
+
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+        self.attn_viz = nn.Identity() 
+
+
+    def forward(self, x, c):
+        if self.use_xformers:
+            q = self.q(c) # B M C
+            k = self.k(x)
+            v = self.v(x)
+
+            q = rearrange(q, "B M (h d) -> B M h d", h=self.num_heads).contiguous()
+            k = rearrange(k, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
+            v = rearrange(v, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
+
+            c = xops.memory_efficient_attention(q, k, v)
+            c = rearrange(c, "B M h d -> B M (h d)")
+            c = self.proj(c)
+            
+        else:
+            B, N, C = x.shape        
+            B, M, _ = c.shape
+            q = self.q(c)  # B N C
+            k = self.k(x)  # B M C
+            v = self.v(x)
+            
+            q = rearrange(q, "B N (h d) -> B h N d", h=self.num_heads).contiguous()
+            k = rearrange(k, "B M (h d) -> B h M d", h=self.num_heads).contiguous()
+            v = rearrange(v, "B N (h d) -> B h N d", h=self.num_heads).contiguous()
+
+            attn = (q @ k.transpose(-2, -1).contiguous()) * self.scale
+            attn = (attn).transpose(-2,-1).contiguous().softmax(dim=-1)
+            attn = self.attn_drop(attn)
+
+            c = (attn @ v)
+            c = rearrange(c, "B h M d -> B M (h d)").contiguous()
+            c = self.proj(c)
+            c = self.proj_drop(c)
+
+        return c
+    
 
 class MixBlock(nn.Module):
     def __init__(self, dim, 
-                 attn_drop, proj_drop, drop_path=0., 
+                 attn_drop, proj_drop, drop_path=0., attn_type=None,
                  layer_scale_init_value=-1, num_heads=8, qk_dim=None, mlp_ratio=4, mlp_dwconv=False,
                  cpe_ks=3, pre_norm=True):
         super().__init__()
@@ -208,8 +349,15 @@ class MixBlock(nn.Module):
         else:
             self.pos_embed = lambda x: 0
         self.norm1 = nn.LayerNorm(dim, eps=1e-6) # important to avoid attention collapsing
-        self.attn = MixAttention(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
-
+        
+        self.attn_type = attn_type
+        if attn_type == "M":
+            self.attn = MixAttention(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
+        elif attn_type == "S" or attn_type == None:
+            self.attn = StandardAttention(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
+        elif attn_type == "STEM":
+            self.attn = StemAttention(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
+            
         self.norm2 = nn.LayerNorm(dim, eps=1e-6)
         self.mlp = nn.Sequential(nn.Linear(dim, int(mlp_ratio*dim)),
                                  DWConv(int(mlp_ratio*dim)) if mlp_dwconv else nn.Identity(),
@@ -221,17 +369,86 @@ class MixBlock(nn.Module):
         # tricks: layer scale & pre_norm/post_norm
         if layer_scale_init_value > 0:
             self.use_layer_scale = True
-            self.gamma1 = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True)
-            self.gamma2 = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True)
+            self.gamma1 = nn.Parameter(layer_scale_init_value * torch.ones((1,1,dim)), requires_grad=True)
+            self.gamma2 = nn.Parameter(layer_scale_init_value * torch.ones((1,1,dim)), requires_grad=True)
         else:
             self.use_layer_scale = False
         self.pre_norm = pre_norm
             
+    def forward_with_xc(self, x, c):
 
-    def forward(self, x):
-        """
-        x: NCHW tensor
-        """
+        _, C, H, W = x.shape
+        # conv pos embedding
+        x = x + self.pos_embed(x)
+        # permute to NHWC tensor for attention & mlp
+        x = rearrange(x, "N C H W -> N (H W) C")
+        # x = x.permute(0, 2, 3, 1) # (N, C, H, W) -> (N, H, W, C)
+
+        # attention & mlp
+        if self.pre_norm:
+            if self.use_layer_scale:
+                _x, _c = self.attn(self.norm1(x), self.norm1(c))
+                x = x + self.drop_path(self.gamma1 * _x) # (N, H, W, C)
+                x = x + self.drop_path(self.gamma2 * self.mlp(self.norm2(x))) # (N, H, W, C)
+                c = c + self.drop_path(self.gamma1 * _c) # (N, H, W, C)
+                c = c + self.drop_path(self.gamma2 * self.mlp(self.norm2(c))) # (N, H, W, C)
+            else:
+                _x, _c = self.attn(self.norm1(x), self.norm1(c))
+                x = x + self.drop_path(_x) # (N, H, W, C)
+                x = x + self.drop_path(self.mlp(self.norm2(x))) # (N, H, W, C)
+                c = c + self.drop_path(_c) # (N, H, W, C)
+                c = c + self.drop_path(self.mlp(self.norm2(c))) # (N, H, W, C)
+        else: # https://kexue.fm/archives/9009
+            if self.use_layer_scale:
+                _x, _c = self.attn(x,c)
+                x = self.norm1(x + self.drop_path(self.gamma1 * _x)) # (N, H, W, C)
+                x = self.norm2(x + self.drop_path(self.gamma2 * self.mlp(x))) # (N, H, W, C)
+                c = self.norm1(c + self.drop_path(self.gamma1 * _c)) # (N, H, W, C)
+                c = self.norm2(c + self.drop_path(self.gamma2 * self.mlp(c))) # (N, H, W, C)
+            else:
+                _x, _c = self.attn(x,c)
+                x = self.norm1(x + self.drop_path(_x)) # (N, H, W, C)
+                x = self.norm2(x + self.drop_path(self.mlp(x))) # (N, H, W, C)
+                c = self.norm1(c + self.drop_path(_c)) # (N, H, W, C)
+                c = self.norm2(c + self.drop_path(self.mlp(c))) # (N, H, W, C)
+                
+        x = rearrange(x, "N (H W) C -> N C H W",H=H,W=W)
+        # permute back
+        # x = x.permute(0, 3, 1, 2) # (N, H, W, C) -> (N, C, H, W)
+        return x, c
+
+    def forward_with_c(self, x, c):
+        
+        _, C, H, W = x.shape
+        _x = x
+        # conv pos embedding
+        x = x + self.pos_embed(x)
+        # permute to NHWC tensor for attention & mlp
+        x = rearrange(x, "N C H W -> N (H W) C")
+        # x = x.permute(0, 2, 3, 1) # (N, C, H, W) -> (N, H, W, C)
+
+        # attention & mlp
+        if self.pre_norm:
+            if self.use_layer_scale:
+                c = c + self.drop_path(self.gamma1 * self.attn(self.norm1(x), self.norm1(c))) # (N, H, W, C)
+                c = c + self.drop_path(self.gamma2 * self.mlp(self.norm2(c))) # (N, H, W, C)
+            else:
+                c = c + self.drop_path(self.attn(self.norm1(x),self.norm1(c))) # (N, H, W, C)
+                c = c + self.drop_path(self.mlp(self.norm2(c))) # (N, H, W, C)
+        else: # https://kexue.fm/archives/9009
+            if self.use_layer_scale:
+                c = self.norm1(c + self.drop_path(self.gamma1 * self.attn(x,c))) # (N, H, W, C)
+                c = self.norm2(c + self.drop_path(self.gamma2 * self.mlp(c))) # (N, H, W, C)
+            else:
+                c = self.norm1(c + self.drop_path(self.attn(x,c))) # (N, H, W, C)
+                c = self.norm2(c + self.drop_path(self.mlp(c))) # (N, H, W, C)
+
+        x = _x
+        # permute back
+        # x = x.permute(0, 3, 1, 2) # (N, H, W, C) -> (N, C, H, W)
+        return x, c
+
+    def forward_with_x(self, x, c):
         
         _, C, H, W = x.shape
         # conv pos embedding
@@ -259,23 +476,32 @@ class MixBlock(nn.Module):
         x = rearrange(x, "N (H W) C -> N C H W",H=H,W=W)
         # permute back
         # x = x.permute(0, 3, 1, 2) # (N, H, W, C) -> (N, C, H, W)
-        return x
+        return x, c
+    
+    def forward(self, x, c):
+        if self.attn_type == "M":
+            return self.forward_with_xc(x,c)
+        elif self.attn_type == "S":
+            return self.forward_with_x(x,c)
+        elif self.attn_type == "STEM":
+            return self.forward_with_c(x,c)
 
 
 class MixFormer(nn.Module):
     def __init__(self, 
-                 depth=[3, 4, 8, 3], 
+                 depth=[2, 3, 4, 8, 3], 
                  in_chans=3, 
                  num_classes=1000, 
-                 embed_dim=[64, 128, 320, 512],
+                 embed_dim=[64, 64, 128, 320, 512], 
                  head_dim=64, 
-                 mlp_ratios=[4, 4, 4, 4],
+                 mlp_ratios=[4, 4, 4, 4, 4], 
                  qkv_bias=True,
                  qk_scale=None,
                  drop_rate=0.,
                  attn_drop=0., 
                  drop_path_rate=0.,
                  # <<<------
+                 attn_type=["STEM","M","M","S","S"],
                  qk_dims=None,
                  cpe_ks=3,
                  pre_norm=True,
@@ -305,25 +531,57 @@ class MixFormer(nn.Module):
             stem = checkpoint_wrapper(stem)
         self.downsample_layers.append(stem)
 
-        for i in range(3):
-            downsample_layer = nn.Sequential(
-                nn.Conv2d(embed_dim[i], embed_dim[i+1], kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)),
-                nn.BatchNorm2d(embed_dim[i+1])
-            )
+        for i in range(4):
+            if attn_type[i] == "STEM":
+                downsample_layer = nn.Identity()
+            else:
+                downsample_layer = nn.Sequential(
+                    nn.Conv2d(embed_dim[i], embed_dim[i+1], kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)),
+                    nn.BatchNorm2d(embed_dim[i+1])
+                )
             if use_checkpoint_stages:
                 downsample_layer = checkpoint_wrapper(downsample_layer)
             self.downsample_layers.append(downsample_layer)
         ##########################################################################
 
+        #TODO: remove last LN
+        self.cluster_nums = 128
+        self.prototypes = nn.Parameter(torch.randn(self.cluster_nums ,embed_dim[0]), requires_grad=True) 
+        
+        self.prototype_downsample = nn.ModuleList()
+        prototype_downsample = nn.Sequential(
+            nn.Linear(embed_dim[0], embed_dim[0] * 4),
+            nn.LayerNorm(embed_dim[0] * 4),
+            nn.GELU(),
+            nn.Linear(embed_dim[0] * 4, embed_dim[0]),
+            nn.LayerNorm(embed_dim[0])
+        )
+        self.prototype_downsample.append(prototype_downsample)
+        for i in range(4):
+            prototype_downsample = nn.Sequential(
+                nn.Linear(embed_dim[i], embed_dim[i] * 4),
+                nn.LayerNorm(embed_dim[i] * 4),
+                nn.GELU(),
+                nn.Linear(embed_dim[i] * 4, embed_dim[i+1]),
+                nn.LayerNorm(embed_dim[i+1])
+            )
+            self.prototype_downsample.append(prototype_downsample)
+
+        # self.prototype_stem = nn.ModuleList()
+        # for i in range(4):
+        #     prototype_stem = StemAttention(embed_dim[0], num_heads=2, bias=True)
+        #     self.prototype_stem.append(prototype_stem)
+        
         self.stages = nn.ModuleList() # 4 feature resolution stages, each consisting of multiple residual blocks
         nheads= [dim // head_dim for dim in qk_dims]
         dp_rates=[x.item() for x in torch.linspace(0, drop_path_rate, sum(depth))] 
         cur = 0
-        for i in range(4):
-            stage = nn.Sequential(
-                *[MixBlock(dim=embed_dim[i], 
+        for i in range(5):
+            stage = nn.ModuleList(
+                [MixBlock(dim=embed_dim[i], 
                            attn_drop=attn_drop, proj_drop=drop_rate,
                            drop_path=dp_rates[cur + j],
+                           attn_type=attn_type[i],
                            layer_scale_init_value=layer_scale_init_value,
                            num_heads=nheads[i],
                            qk_dim=qk_dims[i],
@@ -340,6 +598,7 @@ class MixFormer(nn.Module):
 
         ##########################################################################
         self.norm = nn.BatchNorm2d(embed_dim[-1])
+        self.norm_c = nn.LayerNorm(embed_dim[-1])
         # Representation layer
         if representation_size:
             self.num_features = representation_size
@@ -374,17 +633,28 @@ class MixFormer(nn.Module):
         self.num_classes = num_classes
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
-    def forward_features(self, x):
-        for i in range(4):
+    def forward_features(self, x, c):
+        for i in range(5): 
             x = self.downsample_layers[i](x)
-            x = self.stages[i](x)
+            c = self.prototype_downsample[i](c)
+            for j, block in enumerate(self.stages[i]):
+                x, c = block(x, c)
         x = self.norm(x)
         x = self.pre_logits(x)
+        
+        c = self.norm_c(c)
+        c = self.pre_logits(c)
+
+        x = x.flatten(2)
+        c = c.transpose(-2,-1).contiguous()
+        x = torch.concat([x,c*0.1],dim=-1).mean(-1)
+
         return x
 
     def forward(self, x):
-        x = self.forward_features(x)
-        x = x.flatten(2).mean(-1)
+        B, _, H, W = x.shape 
+        c = self.prototypes.repeat(B,1,1)
+        x = self.forward_features(x, c)
         x = self.head(x)
         return x
 
@@ -406,10 +676,11 @@ class MixFormer(nn.Module):
 def mixformer_tiny(pretrained=False, pretrained_cfg=None,
                   pretrained_cfg_overlay=None, **kwargs):
     model = MixFormer(
-        depth=[2, 2, 4, 2],
-        embed_dim=[64, 128, 256, 512], 
+        depth=[4, 2, 2, 4, 2], 
+        embed_dim=[64, 64, 128, 256, 512], 
         head_dim=32,
-        mlp_ratios=[3, 3, 3, 3],
+        mlp_ratios=[4, 4, 4, 4, 4],
+        attn_type=["STEM","M","M","S","S"],
         qkv_bias=True,
         qk_scale=None,
         attn_drop=0.,
@@ -418,7 +689,7 @@ def mixformer_tiny(pretrained=False, pretrained_cfg=None,
         pre_norm=True,
         mlp_dwconv=False,
         representation_size=None,
-        layer_scale_init_value=1,
+        layer_scale_init_value=-1,
         use_checkpoint_stages=[],
         **kwargs)
     model.default_cfg = _cfg()
@@ -429,6 +700,29 @@ def mixformer_tiny(pretrained=False, pretrained_cfg=None,
     #     checkpoint = torch.hub.load_state_dict_from_url(url=url, map_location="cpu", check_hash=True, file_name=f"{model_key}.pth")
     #     model.load_state_dict(checkpoint["model"])
 
+    return model
+
+@register_model
+def mixformer_tiny_v2(pretrained=False, pretrained_cfg=None,
+                  pretrained_cfg_overlay=None, **kwargs):
+    model = MixFormer(
+        depth=[4, 2, 2, 4, 2],
+        embed_dim=[96, 96, 192, 320, 384], 
+        head_dim=32,
+        mlp_ratios=[4, 4, 4, 4, 4],
+        attn_type=["STEM","M","M","S","S"],
+        qkv_bias=True,
+        qk_scale=None,
+        attn_drop=0.,
+        qk_dims=None,
+        cpe_ks=3,
+        pre_norm=True,
+        mlp_dwconv=False,
+        representation_size=None,
+        layer_scale_init_value=-1,
+        use_checkpoint_stages=[],
+        **kwargs)
+    model.default_cfg = _cfg()
     return model
 
 @register_model

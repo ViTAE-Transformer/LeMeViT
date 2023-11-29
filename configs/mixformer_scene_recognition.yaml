@@ -1,7 +1,7 @@
 # data
-data_dir: ./datasets/IMNET1k
-dataset: imagenet
-num_classes: 1000
+data_dir: ./datasets/millionaid
+dataset: torch/millionaid
+num_classes: 51
 workers: 4
 pin_mem: true
 
@@ -11,7 +11,7 @@ drop: 0.0
 drop_path: 0.1
 
 # opt
-epochs: 300
+epochs: 100
 opt: adamw
 opt_eps: 1e-8
 opt_betas:
@@ -25,7 +25,7 @@ sched: cosine
 lr_base: 5.0e-4
 min_lr: 5.0e-6
 warmup_lr: 1.0e-06
-warmup_epochs: 5
+warmup_epochs: 2
 weight_decay: 2.0e-05
 lr_base_scale: linear
 lr_base_size: 512

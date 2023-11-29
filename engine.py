@@ -95,6 +95,9 @@ def train_one_epoch(
                             mode=args.clip_mode,
                         )
                     optimizer.step()
+                    
+        # for name, param in model.named_parameters():
+        #     assert torch.isfinite(param).all() == True, f"Param {param} not a number"
 
         if has_no_sync and not need_update:
             with model.no_sync():
@@ -103,6 +106,9 @@ def train_one_epoch(
         else:
             loss = _forward()
             _backward(loss)
+
+        # for name, param in model.named_parameters():
+        #     assert torch.isfinite(param.grad).all() == True, f"optim {param.grad} not a number"
 
         if not args.distributed:
             losses_m.update(loss.item() * accum_steps, input.size(0))

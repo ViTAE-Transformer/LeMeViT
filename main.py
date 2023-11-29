@@ -27,7 +27,7 @@ import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel as NativeDDP
 
 from timm import utils
-from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
+from timm.data import create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
 from timm.layers import convert_splitbn_model, convert_sync_batchnorm, set_fast_norm
 from timm.loss import JsdCrossEntropy, SoftTargetCrossEntropy, BinaryCrossEntropy, LabelSmoothingCrossEntropy
 from timm.models import create_model, safe_model_name, resume_checkpoint, load_checkpoint
@@ -37,6 +37,7 @@ from timm.utils import ApexScaler, NativeScaler
 
 from engine import train_one_epoch, validate
 from models import *
+from data import create_dataset
 
 import torchstat, torchinfo, torchsummary
 from calflops import calculate_flops
@@ -78,7 +79,7 @@ _logger = logging.getLogger('train')
 
 def main():
 
-# region Initial    
+# region Initial
     args, args_text = _parse_args()
 
     if torch.cuda.is_available():
@@ -103,7 +104,11 @@ def main():
                 str(data_config['input_size'][-1])
             ])
 
+
         output_dir = utils.get_outdir(args.output if args.output else './output/train', exp_name, inc=not args.override)
+        if args.override:
+            shutil.rmtree(output_dir)
+            os.makedirs(output_dir)
         log_dir = os.path.join(output_dir, "train_log.txt")
 
     # modified ------>>>
@@ -325,7 +330,7 @@ def main():
         else:
             if utils.is_primary(args):
                 _logger.info("Using native Torch DistributedDataParallel.")
-            model = NativeDDP(model, device_ids=[], broadcast_buffers=not args.no_ddp_bb)
+            model = NativeDDP(model, device_ids=[device], broadcast_buffers=not args.no_ddp_bb)
         # NOTE: EMA model does not need to be wrapped by DDP
 
     if args.torchcompile:

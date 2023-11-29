@@ -5,6 +5,9 @@ from torch import nn
 from torch.nn import functional as F
 
 from timm.models.layers import to_2tuple
+from .blur_pool import BlurConv2d
+from .downsample import build_downsample_layer
+
 
 class Conv2d_BN(torch.nn.Sequential):
     def __init__(self, a, b, ks=1, stride=1, pad=0, dilation=1,
