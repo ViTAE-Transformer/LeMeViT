@@ -63,7 +63,7 @@ mixup_mode: batch
 
 # others
 grad_accum_steps: 1
-clip_grad: null
+clip_grad: 5.0
 aa: rand-m9-mstd0.5-inc1
 color_jitter: 0.4
 decay_rate: 0.1

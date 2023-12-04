@@ -1,6 +1,6 @@
 # data
-data_dir: ./datasets/millionaid
-dataset: torch/millionaid
+data_dir: ./datasets/UCM/images_train_test_val
+dataset: ucm
 num_classes: 51
 workers: 4
 pin_mem: true
@@ -25,7 +25,7 @@ sched: cosine
 lr_base: 5.0e-4
 min_lr: 5.0e-6
 warmup_lr: 1.0e-06
-warmup_epochs: 0
+warmup_epochs: 2
 weight_decay: 2.0e-05
 lr_base_scale: linear
 lr_base_size: 512

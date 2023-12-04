@@ -32,14 +32,23 @@ from ._common import Attention, AttentionLePE, DWConv
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
+
+try:
+    from flash_attn import flash_attn_qkvpacked_func, flash_attn_kvpacked_func
+    has_flash_attn = True
+except ImportError:
+    has_flash_attn = False
+    
 try:
     import xformers.ops as xops
-
     has_xformers = True
 except ImportError:
     has_xformers = False
 
 from .layers import PatchEmbed, PatchMerging, Conv2d_BN, LayerNorm
+
+# has_flash_attn = False
+# has_xformers = False
 
 class Attention(nn.Module):
     """Patch-to-Cluster Attention Layer"""
@@ -131,11 +140,10 @@ class StandardAttention(nn.Module):
         assert dim % num_heads == 0, f"dim {dim} not divisible by num_heads {num_heads}"
         self.num_heads = num_heads
 
+        self.use_flash_attn = has_flash_attn
         self.use_xformers = has_xformers and (dim // num_heads) % 32 == 0
 
-        self.q = nn.Linear(dim, dim)
-        self.k = nn.Linear(dim, dim)
-        self.v = nn.Linear(dim, dim)
+        self.qkv = nn.Linear(dim, 3 * dim)
         self.attn_drop = attn_drop
 
         self.proj = nn.Linear(dim, dim)
@@ -144,37 +152,26 @@ class StandardAttention(nn.Module):
         self.attn_viz = nn.Identity() 
 
     def forward(self, x):
-        if self.use_xformers:
-            q = self.q(x)  # B N C
-            k = self.k(x)  
-            v = self.v(x)
-
-            q = rearrange(q, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
-            k = rearrange(k, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
-            v = rearrange(v, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
-
+        if self.use_flash_attn:
+            qkv = self.qkv(x)
+            qkv = rearrange(qkv, "B N (x h d) -> B N x h d", x=3, h=self.num_heads).contiguous()
+            x = flash_attn_qkvpacked_func(qkv)
+            x = rearrange(x, "B N h d -> B N (h d)").contiguous()
+            x = self.proj(x)
+        elif self.use_xformers:
+            qkv = self.qkv(x)
+            qkv = rearrange(qkv, "B N (x h d) -> x B N h d", x=3, h=self.num_heads).contiguous()
+            q, k, v = qkv[0], qkv[1], qkv[2]
             x = xops.memory_efficient_attention(q, k, v)  # B N h d
             x = rearrange(x, "B N h d -> B N (h d)").contiguous()
-
             x = self.proj(x)
         else:
-            B, N, C = x.shape        
-            q = self.q(x)  # B N C
-            k = self.k(x)  
-            v = self.v(x)
-            
-            q = rearrange(q, "B N (h d) -> B h N d", h=self.num_heads).contiguous()
-            k = rearrange(k, "B N (h d) -> B h N d", h=self.num_heads).contiguous()
-            v = rearrange(v, "B N (h d) -> B h N d", h=self.num_heads).contiguous()
-
-            attn = (q @ k.transpose(-2, -1).contiguous()) * self.scale
-            attn = attn.softmax(dim=-1)
-            attn = self.attn_drop(attn)
-
-            x = (attn @ v)
+            qkv = self.qkv(x)
+            qkv = rearrange(qkv, "B N (x h d) -> x B h N d", x=3, h=self.num_heads).contiguous()
+            q, k, v = qkv[0], qkv[1], qkv[2]
+            x = F.scaled_dot_product_attention(q, k, v)  # B N h d
             x = rearrange(x, "B h N d -> B N (h d)").contiguous()
             x = self.proj(x)
-            x = self.proj_drop(x)
         return x
 
 class MixAttention(nn.Module):
@@ -194,81 +191,72 @@ class MixAttention(nn.Module):
         self.num_heads = num_heads
         self.scale = scale or dim**(-0.5)
 
+        self.use_flash_attn = has_flash_attn
         self.use_xformers = has_xformers and (dim // num_heads) % 32 == 0
 
-        self.q1 = nn.Linear(dim, dim)
-        self.k1 = nn.Linear(dim, dim)
-        self.v1 = nn.Linear(dim, dim)
-        self.q2 = nn.Linear(dim, dim)
-        self.k2 = nn.Linear(dim, dim)
-        self.v2 = nn.Linear(dim, dim)
+        self.qkv1 = nn.Linear(dim, 3 * dim)
+        self.qkv2 = nn.Linear(dim, 3 * dim)
         self.attn_drop = nn.Dropout(attn_drop)
 
-        self.proj1 = nn.Linear(dim, dim)
-        self.proj2 = nn.Linear(dim, dim)
+        self.proj_x = nn.Linear(dim, dim)
+        self.proj_c = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
         self.attn_viz = nn.Identity() 
 
     def forward(self, x, c):
         B, N, C = x.shape        
-        B, M, _ = c.shape    
-        if self.use_xformers:
-            q1 = self.q1(x)  # B N C
-            k1 = self.k1(x)
-            v1 = self.v1(x)
-            q2 = self.q2(c)
-            k2 = self.k2(c)  # B M C
-            v2 = self.v2(c)
+        B, M, _ = c.shape 
+        scale_x = math.log(M, N) * self.scale
+        scale_c = math.log(N, N) * self.scale
+        
+        if self.use_flash_attn:
+            qkv1 = self.qkv1(x)
+            qkv1 = rearrange(qkv1, "B N (x h d) -> B N x h d", x=3, h=self.num_heads).contiguous()
+            qkv2 = self.qkv2(c)
+            qkv2 = rearrange(qkv2, "B M (x h d) -> B M x h d", x=3, h=self.num_heads).contiguous()
             
-            q1 = rearrange(q1, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
-            k1 = rearrange(k1, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
-            v1 = rearrange(v1, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
-            q2 = rearrange(q2, "B M (h d) -> B M h d", h=self.num_heads).contiguous()
-            k2 = rearrange(k2, "B M (h d) -> B M h d", h=self.num_heads).contiguous()
-            v2 = rearrange(v2, "B M (h d) -> B M h d", h=self.num_heads).contiguous()
+            q1, kv1 = qkv1[:,:,0], qkv1[:,:,1:]
+            q2, kv2 = qkv2[:,:,0], qkv2[:,:,1:]
             
-            scale_x = math.log(M, N) * self.scale
-            scale_c = math.log(N, N) * self.scale
-
+            x = flash_attn_kvpacked_func(q1, kv2, softmax_scale=scale_x)
+            x = rearrange(x, "B N h d -> B N (h d)").contiguous()
+            x = self.proj_x(x)
+            c = flash_attn_kvpacked_func(q2, kv1, softmax_scale=scale_c)
+            c = rearrange(c, "B M h d -> B M (h d)").contiguous()
+            c = self.proj_c(c)
+        elif self.use_xformers:
+            qkv1 = self.qkv1(x)
+            qkv1 = rearrange(qkv1, "B N (x h d) -> x B N h d", x=3, h=self.num_heads).contiguous()
+            qkv2 = self.qkv2(c)
+            qkv2 = rearrange(qkv2, "B M (x h d) -> x B M h d", x=3, h=self.num_heads).contiguous()
+            
+            q1, k1, v1 = qkv1[0], qkv1[1], qkv1[2]
+            q2, k2, v2 = qkv2[0], qkv2[1], qkv2[2]
+            
             x = xops.memory_efficient_attention(q1, k2, v2, scale=scale_x)  # B N h d
-            c = xops.memory_efficient_attention(q2, k1, v1, scale=scale_c)
-            
-            x = rearrange(x, "B N h d -> B N (h d)")
-            c = rearrange(c, "B M h d -> B M (h d)")
-
-            x = self.proj1(x)
-            c = self.proj2(c)
-            
+            x = rearrange(x, "B N h d -> B N (h d)").contiguous()
+            x = self.proj_x(x)
+            c = xops.memory_efficient_attention(q2, k1, v1, scale=scale_c)  # B N h d
+            c = rearrange(c, "B M h d -> B M (h d)").contiguous()
+            c = self.proj_c(c)
         else:
-            q = self.q(x)  # B N C
-            k = self.k(c)  # B M C
-            v1 = self.v1(x)
-            v2 = self.v2(c)
+            qkv1 = self.qkv1(x)
+            qkv1 = rearrange(qkv1, "B N (x h d) -> x B h N d", x=3, h=self.num_heads).contiguous()
+            qkv2 = self.qkv2(c)
+            qkv2 = rearrange(qkv2, "B M (x h d) -> x B h M d", x=3, h=self.num_heads).contiguous()
             
-            q = rearrange(q, "B N (h d) -> B h N d", h=self.num_heads).contiguous()
-            k = rearrange(k, "B M (h d) -> B h M d", h=self.num_heads).contiguous()
-            v1 = rearrange(v1, "B N (h d) -> B h N d", h=self.num_heads).contiguous()
-            v2 = rearrange(v2, "B M (h d) -> B h M d", h=self.num_heads).contiguous()
-
-            attn = (q @ k.transpose(-2, -1).contiguous()) * self.scale
-            attn1 = (attn*math.log(M)).transpose(-2,-1).contiguous().softmax(dim=-1)
-            attn1 = self.attn_drop(attn1)
-
-            attn2 = (attn*math.log(N)).softmax(dim=-1)
-            attn2 = self.attn_drop(attn2)
-
-            c = (attn1 @ v1)
-            c = rearrange(c, "B h M d -> B M (h d)").contiguous()
-            c = self.proj1(c)
-            c = self.proj_drop(c)
-
-            x = (attn2 @ v2)
+            q1, k1, v1 = qkv1[0], qkv1[1], qkv1[2]
+            q2, k2, v2 = qkv2[0], qkv2[1], qkv2[2]
+            
+            x = F.scaled_dot_product_attention(q1, k2, v2, scale=scale_x)  # B N h d
             x = rearrange(x, "B h N d -> B N (h d)").contiguous()
-            x = self.proj2(x)
-            x = self.proj_drop(x)
-
+            x = self.proj_x(x)
+            c = F.scaled_dot_product_attention(q2, k1, v1, scale=scale_c)  # B N h d
+            c = rearrange(c, "B h M d -> B M (h d)").contiguous()
+            c = self.proj_c(c)
         return x, c
+    
 
 class StemAttention(nn.Module):
     def __init__(
@@ -285,11 +273,11 @@ class StemAttention(nn.Module):
         assert dim % num_heads == 0, f"dim {dim} not divisible by num_heads {num_heads}"
         self.num_heads = num_heads
 
+        self.use_flash_attn = has_flash_attn
         self.use_xformers = has_xformers and (dim // num_heads) % 32 == 0
 
         self.q = nn.Linear(dim, dim)
-        self.k = nn.Linear(dim, dim)
-        self.v = nn.Linear(dim, dim)
+        self.kv = nn.Linear(dim, 2 * dim)
         self.attn_drop = attn_drop
 
         self.proj = nn.Linear(dim, dim)
@@ -299,39 +287,38 @@ class StemAttention(nn.Module):
 
 
     def forward(self, x, c):
-        if self.use_xformers:
-            q = self.q(c) # B M C
-            k = self.k(x)
-            v = self.v(x)
-
+        B, N, C = x.shape        
+        B, M, _ = c.shape 
+        
+        if self.use_flash_attn:
+            q = self.q(c)
+            kv = self.kv(x)
             q = rearrange(q, "B M (h d) -> B M h d", h=self.num_heads).contiguous()
-            k = rearrange(k, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
-            v = rearrange(v, "B N (h d) -> B N h d", h=self.num_heads).contiguous()
-
-            c = xops.memory_efficient_attention(q, k, v)
-            c = rearrange(c, "B M h d -> B M (h d)")
+            kv = rearrange(kv, "B N (x h d) -> B N x h d", x=2, h=self.num_heads).contiguous()
+            
+            c = flash_attn_kvpacked_func(q, kv)
+            c = rearrange(c, "B M h d -> B M (h d)").contiguous()
             c = self.proj(c)
+        elif self.use_xformers:
+            q = self.q(c)
+            kv = self.kv(x)
+            q = rearrange(q, "B M (h d) -> B M h d", h=self.num_heads).contiguous()
+            kv = rearrange(kv, "B N (x h d) -> x B N h d", x=2, h=self.num_heads).contiguous()
+            k, v = kv[0], kv[1]
             
+            c = xops.memory_efficient_attention(q, k, v)
+            c = rearrange(c, "B M h d -> B M (h d)").contiguous()
+            c = self.proj(c)
         else:
-            B, N, C = x.shape        
-            B, M, _ = c.shape
-            q = self.q(c)  # B N C
-            k = self.k(x)  # B M C
-            v = self.v(x)
+            q = self.q(c)
+            kv = self.kv(x)
+            q = rearrange(q, "B M (h d) -> B h M d", h=self.num_heads).contiguous()
+            kv = rearrange(kv, "B N (x h d) -> x B h N d", x=2, h=self.num_heads).contiguous()
+            k, v = kv[0], kv[1]
             
-            q = rearrange(q, "B N (h d) -> B h N d", h=self.num_heads).contiguous()
-            k = rearrange(k, "B M (h d) -> B h M d", h=self.num_heads).contiguous()
-            v = rearrange(v, "B N (h d) -> B h N d", h=self.num_heads).contiguous()
-
-            attn = (q @ k.transpose(-2, -1).contiguous()) * self.scale
-            attn = (attn).transpose(-2,-1).contiguous().softmax(dim=-1)
-            attn = self.attn_drop(attn)
-
-            c = (attn @ v)
+            c = F.scaled_dot_product_attention(q, k, v)
             c = rearrange(c, "B h M d -> B M (h d)").contiguous()
             c = self.proj(c)
-            c = self.proj_drop(c)
-
         return c
     
 
@@ -353,6 +340,8 @@ class MixBlock(nn.Module):
         self.attn_type = attn_type
         if attn_type == "M":
             self.attn = MixAttention(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
+        # if attn_type == "M2":
+        #     self.attn = MixAttention_v2(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
         elif attn_type == "S" or attn_type == None:
             self.attn = StandardAttention(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
         elif attn_type == "STEM":
@@ -479,7 +468,7 @@ class MixBlock(nn.Module):
         return x, c
     
     def forward(self, x, c):
-        if self.attn_type == "M":
+        if self.attn_type == "M" or self.attn_type == "M2":
             return self.forward_with_xc(x,c)
         elif self.attn_type == "S":
             return self.forward_with_x(x,c)
@@ -544,7 +533,7 @@ class MixFormer(nn.Module):
             self.downsample_layers.append(downsample_layer)
         ##########################################################################
 
-        #TODO: remove last LN
+        #TODO: maybe remove last LN
         self.cluster_nums = 128
         self.prototypes = nn.Parameter(torch.randn(self.cluster_nums ,embed_dim[0]), requires_grad=True) 
         
@@ -706,7 +695,7 @@ def mixformer_tiny(pretrained=False, pretrained_cfg=None,
 def mixformer_tiny_v2(pretrained=False, pretrained_cfg=None,
                   pretrained_cfg_overlay=None, **kwargs):
     model = MixFormer(
-        depth=[4, 2, 2, 4, 2],
+        depth=[2, 2, 2, 4, 2],
         embed_dim=[96, 96, 192, 320, 384], 
         head_dim=32,
         mlp_ratios=[4, 4, 4, 4, 4],
@@ -725,14 +714,15 @@ def mixformer_tiny_v2(pretrained=False, pretrained_cfg=None,
     model.default_cfg = _cfg()
     return model
 
+
 @register_model
 def mixformer_small(pretrained=False, pretrained_cfg=None,
                   pretrained_cfg_overlay=None, **kwargs):
     model = MixFormer(
-        depth=[4, 4, 18, 4],
-        embed_dim=[64, 128, 256, 512], 
+        depth=[4, 4, 4, 16, 4],
+        embed_dim=[64, 64, 128, 256, 512], 
         head_dim=32,
-        mlp_ratios=[3, 3, 3, 3],
+        mlp_ratios=[3, 3, 3, 3, 3],
         qkv_bias=True,
         qk_scale=None,
         attn_drop=0.,

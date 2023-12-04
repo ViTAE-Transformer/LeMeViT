@@ -10,6 +10,7 @@ from math import gamma
 import torch
 import torch.nn as nn
 
+from timm.models import register_model
 from timm.models.helpers import load_pretrained
 # from timm.models.registry import register_model
 import numpy as np
@@ -29,12 +30,12 @@ default_cfgs = {
     'ViTAE_stages3_7': _cfg(),
 }
 
-# @register_model
+@register_model
 def ViTAE_Window_NoShift_12_basic_stages4_14(pretrained=False, **kwargs): # adopt performer for tokens to token
     # if pretrained:
         # kwargs.setdefault('qk_scale', 256 ** -0.5)
     model = ViTAE_Window_NoShift_basic(RC_tokens_type=['swin', 'swin', 'transformer', 'transformer'], NC_tokens_type=['swin', 'swin', 'transformer', 'transformer'], stages=4, embed_dims=[64, 64, 128, 256], token_dims=[64, 128, 256, 512], downsample_ratios=[4, 2, 2, 2],
-                            NC_depth=[2, 2, 8, 2], NC_heads=[1, 2, 4, 8], RC_heads=[1, 1, 2, 4], mlp_ratio=4., NC_group=[1, 32, 64, 128], RC_group=[1, 16, 32, 64], **kwargs)
+                            NC_depth=[2, 2, 8, 2], NC_heads=[1, 2, 4, 8], RC_heads=[1, 1, 2, 4], mlp_ratio=4., NC_group=[1, 32, 64, 128], RC_group=[1, 16, 32, 64])
     model.default_cfg = default_cfgs['ViTAE_stages3_7']
     if pretrained:
         load_pretrained(
