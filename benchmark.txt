@@ -1,2 +1,2 @@
-model,infer_samples_per_sec,infer_step_time,infer_batch_size,infer_img_size,train_samples_per_sec,train_step_time,train_batch_size,train_img_size,param_count
-mixformer_tiny_v2,4214.42,15.173,64,224,1041.35,60.349,64,224,14.05
+model,infer_samples_per_sec,infer_step_time,infer_batch_size,infer_img_size,infer_gmacs,train_samples_per_sec,train_step_time,train_batch_size,train_img_size,param_count
+mixformer_tiny,3525.52,18.134,64,224,3.46,860.4,73.359,64,224,14.05

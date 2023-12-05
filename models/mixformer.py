@@ -34,7 +34,7 @@ from einops.layers.torch import Rearrange
 
 
 try:
-    from flash_attn import flash_attn_qkvpacked_func, flash_attn_kvpacked_func
+    from flash_attn import flash_attn_qkvpacked_func, flash_attn_kvpacked_func, flash_attn_func
     has_flash_attn = True
 except ImportError:
     has_flash_attn = False
@@ -257,6 +257,88 @@ class MixAttention(nn.Module):
             c = self.proj_c(c)
         return x, c
     
+class MixAttention_v2(nn.Module):
+    
+    def __init__(
+        self,
+        dim,
+        num_heads,
+        scale = None,
+        bias = False,
+        attn_drop=0.0,
+        proj_drop=0.0,
+        **kwargs,
+    ):
+        super().__init__()
+        assert dim % num_heads == 0, f"dim {dim} not divisible by num_heads {num_heads}"
+        self.num_heads = num_heads
+        self.scale = scale or dim**(-0.5)
+
+        self.use_flash_attn = has_flash_attn
+        self.use_xformers = has_xformers and (dim // num_heads) % 32 == 0
+
+        self.qv1 = nn.Linear(dim, 2 * dim)
+        self.kv2 = nn.Linear(dim, 2 * dim)
+        self.attn_drop = nn.Dropout(attn_drop)
+
+        self.proj_x = nn.Linear(dim, dim)
+        self.proj_c = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+        self.attn_viz = nn.Identity() 
+
+    def forward(self, x, c):
+        B, N, C = x.shape        
+        B, M, _ = c.shape 
+        scale_x = math.log(M, N) * self.scale
+        scale_c = math.log(N, N) * self.scale
+        
+        if self.use_flash_attn:
+            qv1 = self.qv1(x)
+            qv1 = rearrange(qv1, "B N (x h d) -> B N x h d", x=2, h=self.num_heads).contiguous()
+            kv2 = self.kv2(c)
+            kv2 = rearrange(kv2, "B M (x h d) -> B M x h d", x=2, h=self.num_heads).contiguous()
+            
+            q, v1 = qv1[:,:,0], qv1[:,:,1]
+            k, v2 = kv2[:,:,0], kv2[:,:,1]
+            
+            x = flash_attn_func(q, k, v2, softmax_scale=scale_x)
+            x = rearrange(x, "B N h d -> B N (h d)").contiguous()
+            x = self.proj_x(x)
+            c = flash_attn_func(k, q, v1, softmax_scale=scale_c)
+            c = rearrange(c, "B M h d -> B M (h d)").contiguous()
+            c = self.proj_c(c)
+        elif self.use_xformers:
+            qv1 = self.qv1(x)
+            qv1 = rearrange(qv1, "B N (x h d) -> x B h N d", x=2, h=self.num_heads).contiguous()
+            kv2 = self.kv2(c)
+            kv2 = rearrange(kv2, "B M (x h d) -> x B h M d", x=2, h=self.num_heads).contiguous()
+            
+            q, v1 = qv1[0], qv1[1]
+            k, v2 = kv2[0], kv2[1]
+            
+            x = xops.memory_efficient_attention(q, k, v2, scale=scale_x)
+            x = rearrange(x, "B h N d -> B N (h d)").contiguous()
+            x = self.proj_x(x)
+            c = xops.memory_efficient_attention(k, q, v1, scale=scale_c)
+            c = rearrange(c, "B h M d -> B M (h d)").contiguous()
+            c = self.proj_c(c)
+        else:
+            qv1 = self.qv1(x)
+            qv1 = rearrange(qv1, "B N (x h d) -> x B h N d", x=2, h=self.num_heads).contiguous()
+            kv2 = self.kv2(c)
+            kv2 = rearrange(kv2, "B M (x h d) -> x B h M d", x=2, h=self.num_heads).contiguous()
+            
+            q, v1 = qv1[0], qv1[1]
+            k, v2 = kv2[0], kv2[1]
+
+            x = F.scaled_dot_product_attention(q, k, v2, scale=scale_x)
+            x = rearrange(x, "B h N d -> B N (h d)").contiguous()
+            x = self.proj_x(x)
+            c = F.scaled_dot_product_attention(k, q, v1, scale=scale_c)
+            c = rearrange(c, "B h M d -> B M (h d)").contiguous()
+            c = self.proj_c(c)
+        return x, c
 
 class StemAttention(nn.Module):
     def __init__(
@@ -340,8 +422,8 @@ class MixBlock(nn.Module):
         self.attn_type = attn_type
         if attn_type == "M":
             self.attn = MixAttention(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
-        # if attn_type == "M2":
-        #     self.attn = MixAttention_v2(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
+        elif attn_type == "M2":
+            self.attn = MixAttention_v2(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
         elif attn_type == "S" or attn_type == None:
             self.attn = StandardAttention(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
         elif attn_type == "STEM":
@@ -491,6 +573,7 @@ class MixFormer(nn.Module):
                  drop_path_rate=0.,
                  # <<<------
                  attn_type=["STEM","M","M","S","S"],
+                 queries_len=128,
                  qk_dims=None,
                  cpe_ks=3,
                  pre_norm=True,
@@ -534,8 +617,8 @@ class MixFormer(nn.Module):
         ##########################################################################
 
         #TODO: maybe remove last LN
-        self.cluster_nums = 128
-        self.prototypes = nn.Parameter(torch.randn(self.cluster_nums ,embed_dim[0]), requires_grad=True) 
+        self.queries_len = queries_len
+        self.prototypes = nn.Parameter(torch.randn(self.queries_len ,embed_dim[0]), requires_grad=True) 
         
         self.prototype_downsample = nn.ModuleList()
         prototype_downsample = nn.Sequential(
@@ -634,9 +717,9 @@ class MixFormer(nn.Module):
         c = self.norm_c(c)
         c = self.pre_logits(c)
 
-        x = x.flatten(2)
-        c = c.transpose(-2,-1).contiguous()
-        x = torch.concat([x,c*0.1],dim=-1).mean(-1)
+        x = x.flatten(2).mean(-1,keepdim=True)
+        c = c.transpose(-2,-1).contiguous().mean(-1,keepdim=True)
+        x = torch.concat([x,c],dim=-1).mean(-1)
 
         return x
 
@@ -665,11 +748,12 @@ class MixFormer(nn.Module):
 def mixformer_tiny(pretrained=False, pretrained_cfg=None,
                   pretrained_cfg_overlay=None, **kwargs):
     model = MixFormer(
-        depth=[4, 2, 2, 4, 2], 
-        embed_dim=[64, 64, 128, 256, 512], 
+        depth=[2, 2, 2, 4, 2],
+        embed_dim=[96, 96, 192, 320, 384], 
         head_dim=32,
         mlp_ratios=[4, 4, 4, 4, 4],
         attn_type=["STEM","M","M","S","S"],
+        queries_len=128,
         qkv_bias=True,
         qk_scale=None,
         attn_drop=0.,
@@ -699,7 +783,8 @@ def mixformer_tiny_v2(pretrained=False, pretrained_cfg=None,
         embed_dim=[96, 96, 192, 320, 384], 
         head_dim=32,
         mlp_ratios=[4, 4, 4, 4, 4],
-        attn_type=["STEM","M","M","S","S"],
+        attn_type=["STEM","M2","M2","S","S"],
+        queries_len=128,
         qkv_bias=True,
         qk_scale=None,
         attn_drop=0.,
