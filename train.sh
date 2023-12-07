@@ -22,7 +22,7 @@ CUDA_VISIBLE_DEVICES="4,5,6,7" \
     main.py \
     --config configs/mixformer_scene_recognition.yaml \
     --output outputs/scene_recognition \
-    --experiment exp2 \
+    --experiment exp6 \
     --model mixformer_tiny \
     --img-size 224 \
-    --batch-size 200
+    --batch-size 256
