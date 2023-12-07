@@ -47,8 +47,8 @@ except ImportError:
 
 from .layers import PatchEmbed, PatchMerging, Conv2d_BN, LayerNorm
 
-# has_flash_attn = False
-# has_xformers = False
+has_flash_attn = False
+has_xformers = False
 
 class Attention(nn.Module):
     """Patch-to-Cluster Attention Layer"""
@@ -717,9 +717,13 @@ class MixFormer(nn.Module):
         c = self.norm_c(c)
         c = self.pre_logits(c)
 
-        x = x.flatten(2).mean(-1,keepdim=True)
-        c = c.transpose(-2,-1).contiguous().mean(-1,keepdim=True)
-        x = torch.concat([x,c],dim=-1).mean(-1)
+        # x = x.flatten(2).mean(-1,keepdim=True)
+        # c = c.transpose(-2,-1).contiguous().mean(-1,keepdim=True)
+        # x = torch.concat([x,c],dim=-1).mean(-1)
+
+        x = x.flatten(2).mean(-1)
+        c = c.transpose(-2,-1).contiguous().mean(-1)
+        x = x + c
 
         return x
 
