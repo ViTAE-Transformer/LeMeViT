@@ -10,8 +10,6 @@ LICENSE file in the root directory of this source tree.
 """
 import math
 from collections import OrderedDict
-from functools import partial
-from typing import Optional, Union
 
 import torch
 import torch.nn as nn
@@ -23,9 +21,6 @@ from timm.models import register_model
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 from timm.models.vision_transformer import _cfg
 
-from ops.bra_legacy import BiLevelRoutingAttention
-
-from ._common import Attention, AttentionLePE, DWConv
 
 # from positional_encodings import PositionalEncodingPermute2D, Summer
 # from siren_pytorch import SirenNet
@@ -45,10 +40,24 @@ try:
 except ImportError:
     has_xformers = False
 
-from .layers import PatchEmbed, PatchMerging, Conv2d_BN, LayerNorm
 
 has_flash_attn = False
 has_xformers = False
+
+class DWConv(nn.Module):
+    def __init__(self, dim=768):
+        super(DWConv, self).__init__()
+        self.dwconv = nn.Conv2d(dim, dim, 3, 1, 1, bias=True, groups=dim)
+
+    def forward(self, x):
+        """
+        x: NHWC tensor
+        """
+        x = x.permute(0, 3, 1, 2) #NCHW
+        x = self.dwconv(x)
+        x = x.permute(0, 2, 3, 1) #NHWC
+
+        return x
 
 class Attention(nn.Module):
     """Patch-to-Cluster Attention Layer"""

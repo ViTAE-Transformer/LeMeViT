@@ -2,7 +2,7 @@
 import torch.nn as nn
 from mmcv.cnn import ConvModule, build_norm_layer
 
-from mmseg.registry import MODELS
+from ..builder import NECKS
 
 
 class MLAModule(nn.Module):
@@ -12,7 +12,7 @@ class MLAModule(nn.Module):
                  out_channels=256,
                  norm_cfg=None,
                  act_cfg=None):
-        super().__init__()
+        super(MLAModule, self).__init__()
         self.channel_proj = nn.ModuleList()
         for i in range(len(in_channels)):
             self.channel_proj.append(
@@ -59,7 +59,7 @@ class MLAModule(nn.Module):
         return tuple(out_list)
 
 
-@MODELS.register_module()
+@NECKS.register_module()
 class MLANeck(nn.Module):
     """Multi-level Feature Aggregation.
 
@@ -83,7 +83,7 @@ class MLANeck(nn.Module):
                  norm_layer=dict(type='LN', eps=1e-6, requires_grad=True),
                  norm_cfg=None,
                  act_cfg=None):
-        super().__init__()
+        super(MLANeck, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels

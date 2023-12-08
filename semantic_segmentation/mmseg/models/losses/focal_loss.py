@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.ops import sigmoid_focal_loss as _sigmoid_focal_loss
 
-from mmseg.registry import MODELS
+from ..builder import LOSSES
 from .utils import weight_reduce_loss
 
 
@@ -133,7 +133,7 @@ def sigmoid_focal_loss(pred,
     return loss
 
 
-@MODELS.register_module()
+@LOSSES.register_module()
 class FocalLoss(nn.Module):
 
     def __init__(self,
@@ -172,7 +172,7 @@ class FocalLoss(nn.Module):
                 loss item to be included into the backward graph, `loss_` must
                 be the prefix of the name. Defaults to 'loss_focal'.
         """
-        super().__init__()
+        super(FocalLoss, self).__init__()
         assert use_sigmoid is True, \
             'AssertionError: Only sigmoid focal loss supported now.'
         assert reduction in ('none', 'mean', 'sum'), \
@@ -271,13 +271,7 @@ class FocalLoss(nn.Module):
             num_classes = pred.size(1)
             if torch.cuda.is_available() and pred.is_cuda:
                 if target.dim() == 1:
-                    one_hot_target = F.one_hot(
-                        target, num_classes=num_classes + 1)
-                    if num_classes == 1:
-                        one_hot_target = one_hot_target[:, 1]
-                        target = 1 - target
-                    else:
-                        one_hot_target = one_hot_target[:, :num_classes]
+                    one_hot_target = F.one_hot(target, num_classes=num_classes)
                 else:
                     one_hot_target = target
                     target = target.argmax(dim=1)
@@ -286,11 +280,7 @@ class FocalLoss(nn.Module):
             else:
                 one_hot_target = None
                 if target.dim() == 1:
-                    target = F.one_hot(target, num_classes=num_classes + 1)
-                    if num_classes == 1:
-                        target = target[:, 1]
-                    else:
-                        target = target[:, num_classes]
+                    target = F.one_hot(target, num_classes=num_classes)
                 else:
                     valid_mask = (target.argmax(dim=1) != ignore_index).view(
                         -1, 1)

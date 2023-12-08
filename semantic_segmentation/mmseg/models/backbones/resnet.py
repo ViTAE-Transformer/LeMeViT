@@ -4,10 +4,10 @@ import warnings
 import torch.nn as nn
 import torch.utils.checkpoint as cp
 from mmcv.cnn import build_conv_layer, build_norm_layer, build_plugin_layer
-from mmengine.model import BaseModule
-from mmengine.utils.dl_utils.parrots_wrapper import _BatchNorm
+from mmcv.runner import BaseModule
+from mmcv.utils.parrots_wrapper import _BatchNorm
 
-from mmseg.registry import MODELS
+from ..builder import BACKBONES
 from ..utils import ResLayer
 
 
@@ -29,7 +29,7 @@ class BasicBlock(BaseModule):
                  dcn=None,
                  plugins=None,
                  init_cfg=None):
-        super().__init__(init_cfg)
+        super(BasicBlock, self).__init__(init_cfg)
         assert dcn is None, 'Not implemented yet.'
         assert plugins is None, 'Not implemented yet.'
 
@@ -118,7 +118,7 @@ class Bottleneck(BaseModule):
                  dcn=None,
                  plugins=None,
                  init_cfg=None):
-        super().__init__(init_cfg)
+        super(Bottleneck, self).__init__(init_cfg)
         assert style in ['pytorch', 'caffe']
         assert dcn is None or isinstance(dcn, dict)
         assert plugins is None or isinstance(plugins, list)
@@ -307,7 +307,7 @@ class Bottleneck(BaseModule):
         return out
 
 
-@MODELS.register_module()
+@BACKBONES.register_module()
 class ResNet(BaseModule):
     """ResNet backbone.
 
@@ -418,7 +418,7 @@ class ResNet(BaseModule):
                  zero_init_residual=True,
                  pretrained=None,
                  init_cfg=None):
-        super().__init__(init_cfg)
+        super(ResNet, self).__init__(init_cfg)
         if depth not in self.arch_settings:
             raise KeyError(f'invalid depth {depth} for resnet')
 
@@ -676,7 +676,7 @@ class ResNet(BaseModule):
     def train(self, mode=True):
         """Convert the model into training mode while keep normalization layer
         freezed."""
-        super().train(mode)
+        super(ResNet, self).train(mode)
         self._freeze_stages()
         if mode and self.norm_eval:
             for m in self.modules():
@@ -685,7 +685,7 @@ class ResNet(BaseModule):
                     m.eval()
 
 
-@MODELS.register_module()
+@BACKBONES.register_module()
 class ResNetV1c(ResNet):
     """ResNetV1c variant described in [1]_.
 
@@ -696,10 +696,11 @@ class ResNetV1c(ResNet):
     """
 
     def __init__(self, **kwargs):
-        super().__init__(deep_stem=True, avg_down=False, **kwargs)
+        super(ResNetV1c, self).__init__(
+            deep_stem=True, avg_down=False, **kwargs)
 
 
-@MODELS.register_module()
+@BACKBONES.register_module()
 class ResNetV1d(ResNet):
     """ResNetV1d variant described in [1]_.
 
@@ -709,4 +710,5 @@ class ResNetV1d(ResNet):
     """
 
     def __init__(self, **kwargs):
-        super().__init__(deep_stem=True, avg_down=True, **kwargs)
+        super(ResNetV1d, self).__init__(
+            deep_stem=True, avg_down=True, **kwargs)

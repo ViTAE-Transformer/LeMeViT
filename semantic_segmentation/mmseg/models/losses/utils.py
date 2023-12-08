@@ -1,10 +1,10 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import functools
 
+import mmcv
 import numpy as np
 import torch
 import torch.nn.functional as F
-from mmengine.fileio import load
 
 
 def get_class_weight(class_weight):
@@ -20,12 +20,12 @@ def get_class_weight(class_weight):
             class_weight = np.load(class_weight)
         else:
             # pkl, json or yaml
-            class_weight = load(class_weight)
+            class_weight = mmcv.load(class_weight)
 
     return class_weight
 
 
-def reduce_loss(loss, reduction) -> torch.Tensor:
+def reduce_loss(loss, reduction):
     """Reduce loss as specified.
 
     Args:
@@ -45,10 +45,7 @@ def reduce_loss(loss, reduction) -> torch.Tensor:
         return loss.sum()
 
 
-def weight_reduce_loss(loss,
-                       weight=None,
-                       reduction='mean',
-                       avg_factor=None) -> torch.Tensor:
+def weight_reduce_loss(loss, weight=None, reduction='mean', avg_factor=None):
     """Apply element-wise weight and reduce loss.
 
     Args:

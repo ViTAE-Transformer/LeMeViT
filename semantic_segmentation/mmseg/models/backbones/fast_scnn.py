@@ -2,11 +2,12 @@
 import torch
 import torch.nn as nn
 from mmcv.cnn import ConvModule, DepthwiseSeparableConvModule
-from mmengine.model import BaseModule
+from mmcv.runner import BaseModule
 
 from mmseg.models.decode_heads.psp_head import PPM
-from mmseg.registry import MODELS
-from ..utils import InvertedResidual, resize
+from mmseg.ops import resize
+from ..builder import BACKBONES
+from ..utils import InvertedResidual
 
 
 class LearningToDownsample(nn.Module):
@@ -36,7 +37,7 @@ class LearningToDownsample(nn.Module):
                  norm_cfg=dict(type='BN'),
                  act_cfg=dict(type='ReLU'),
                  dw_act_cfg=None):
-        super().__init__()
+        super(LearningToDownsample, self).__init__()
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
         self.act_cfg = act_cfg
@@ -124,7 +125,7 @@ class GlobalFeatureExtractor(nn.Module):
                  norm_cfg=dict(type='BN'),
                  act_cfg=dict(type='ReLU'),
                  align_corners=False):
-        super().__init__()
+        super(GlobalFeatureExtractor, self).__init__()
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
         self.act_cfg = act_cfg
@@ -220,7 +221,7 @@ class FeatureFusionModule(nn.Module):
                  dwconv_act_cfg=dict(type='ReLU'),
                  conv_act_cfg=None,
                  align_corners=False):
-        super().__init__()
+        super(FeatureFusionModule, self).__init__()
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
         self.dwconv_act_cfg = dwconv_act_cfg
@@ -267,7 +268,7 @@ class FeatureFusionModule(nn.Module):
         return self.relu(out)
 
 
-@MODELS.register_module()
+@BACKBONES.register_module()
 class FastSCNN(BaseModule):
     """Fast-SCNN Backbone.
 
@@ -340,7 +341,7 @@ class FastSCNN(BaseModule):
                  dw_act_cfg=None,
                  init_cfg=None):
 
-        super().__init__(init_cfg)
+        super(FastSCNN, self).__init__(init_cfg)
 
         if init_cfg is None:
             self.init_cfg = [

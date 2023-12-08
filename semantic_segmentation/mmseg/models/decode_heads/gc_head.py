@@ -2,11 +2,11 @@
 import torch
 from mmcv.cnn import ContextBlock
 
-from mmseg.registry import MODELS
+from ..builder import HEADS
 from .fcn_head import FCNHead
 
 
-@MODELS.register_module()
+@HEADS.register_module()
 class GCHead(FCNHead):
     """GCNet: Non-local Networks Meet Squeeze-Excitation Networks and Beyond.
 
@@ -26,7 +26,7 @@ class GCHead(FCNHead):
                  pooling_type='att',
                  fusion_types=('channel_add', ),
                  **kwargs):
-        super().__init__(num_convs=2, **kwargs)
+        super(GCHead, self).__init__(num_convs=2, **kwargs)
         self.ratio = ratio
         self.pooling_type = pooling_type
         self.fusion_types = fusion_types

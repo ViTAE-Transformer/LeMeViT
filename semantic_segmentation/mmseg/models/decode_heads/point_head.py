@@ -10,12 +10,9 @@ try:
 except ModuleNotFoundError:
     point_sample = None
 
-from typing import List
-
-from mmseg.registry import MODELS
-from mmseg.utils import SampleList
+from mmseg.models.builder import HEADS
+from mmseg.ops import resize
 from ..losses import accuracy
-from ..utils import resize
 from .cascade_decode_head import BaseCascadeDecodeHead
 
 
@@ -39,7 +36,7 @@ def calculate_uncertainty(seg_logits):
     return (top2_scores[:, 1] - top2_scores[:, 0]).unsqueeze(1)
 
 
-@MODELS.register_module()
+@HEADS.register_module()
 class PointHead(BaseCascadeDecodeHead):
     """A mask point head use in PointRend.
 
@@ -74,7 +71,7 @@ class PointHead(BaseCascadeDecodeHead):
                  norm_cfg=None,
                  act_cfg=dict(type='ReLU', inplace=False),
                  **kwargs):
-        super().__init__(
+        super(PointHead, self).__init__(
             input_transform='multiple_select',
             conv_cfg=conv_cfg,
             norm_cfg=norm_cfg,
@@ -173,15 +170,19 @@ class PointHead(BaseCascadeDecodeHead):
 
         return coarse_feats
 
-    def loss(self, inputs, prev_output, batch_data_samples: SampleList,
-             train_cfg, **kwargs):
+    def forward_train(self, inputs, prev_output, img_metas, gt_semantic_seg,
+                      train_cfg):
         """Forward function for training.
         Args:
             inputs (list[Tensor]): List of multi-level img features.
             prev_output (Tensor): The output of previous decode head.
-            batch_data_samples (list[:obj:`SegDataSample`]): The seg
-                data samples. It usually includes information such
-                as `img_metas` or `gt_semantic_seg`.
+            img_metas (list[dict]): List of image info dict where each dict
+                has: 'img_shape', 'scale_factor', 'flip', and may also contain
+                'filename', 'ori_shape', 'pad_shape', and 'img_norm_cfg'.
+                For details on the values of these keys see
+                `mmseg/datasets/pipelines/formatting.py:Collect`.
+            gt_semantic_seg (Tensor): Semantic segmentation masks
+                used if the architecture supports semantic segmentation task.
             train_cfg (dict): The training config.
 
         Returns:
@@ -196,13 +197,18 @@ class PointHead(BaseCascadeDecodeHead):
         coarse_point_feats = self._get_coarse_point_feats(prev_output, points)
         point_logits = self.forward(fine_grained_point_feats,
                                     coarse_point_feats)
+        point_label = point_sample(
+            gt_semantic_seg.float(),
+            points,
+            mode='nearest',
+            align_corners=self.align_corners)
+        point_label = point_label.squeeze(1).long()
 
-        losses = self.loss_by_feat(point_logits, points, batch_data_samples)
+        losses = self.losses(point_logits, point_label)
 
         return losses
 
-    def predict(self, inputs, prev_output, batch_img_metas: List[dict],
-                test_cfg, **kwargs):
+    def forward_test(self, inputs, prev_output, img_metas, test_cfg):
         """Forward function for testing.
 
         Args:
@@ -245,19 +251,10 @@ class PointHead(BaseCascadeDecodeHead):
             refined_seg_logits = refined_seg_logits.view(
                 batch_size, channels, height, width)
 
-        return self.predict_by_feat(refined_seg_logits, batch_img_metas,
-                                    **kwargs)
+        return refined_seg_logits
 
-    def loss_by_feat(self, point_logits, points, batch_data_samples, **kwargs):
+    def losses(self, point_logits, point_label):
         """Compute segmentation loss."""
-        gt_semantic_seg = self._stack_batch_gt(batch_data_samples)
-        point_label = point_sample(
-            gt_semantic_seg.float(),
-            points,
-            mode='nearest',
-            align_corners=self.align_corners)
-        point_label = point_label.squeeze(1).long()
-
         loss = dict()
         if not isinstance(self.loss_decode, nn.ModuleList):
             losses_decode = [self.loss_decode]

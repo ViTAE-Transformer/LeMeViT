@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import mmcv
 import requests
 
-from mmseg.apis import inference_model, init_model
+from mmseg.apis import inference_segmentor, init_segmentor
 
 
 def parse_args():
@@ -46,9 +46,9 @@ def main(args):
     else:
         plt.imshow(plt.imread(BytesIO(content)))
         plt.show()
-    model = init_model(args.config, args.checkpoint, args.device)
+    model = init_segmentor(args.config, args.checkpoint, args.device)
     image = mmcv.imread(args.img)
-    result = inference_model(model, image)
+    result = inference_segmentor(model, image)
     plt.imshow(result[0])
     plt.show()
 

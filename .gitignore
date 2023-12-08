@@ -3,6 +3,6 @@ outputs*
 __pycache__
 .pyc
 .vscode
-datasets
+/datasets/
 backup
 *.backup*

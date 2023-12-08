@@ -2,7 +2,7 @@
 import argparse
 import os.path as osp
 
-import mmengine
+import mmcv
 import numpy as np
 import torch
 
@@ -115,7 +115,7 @@ def main():
     else:
         num_layer = 12
     torch_weights = vit_jax_to_torch(jax_weights_tensor, num_layer)
-    mmengine.mkdir_or_exist(osp.dirname(args.dst))
+    mmcv.mkdir_or_exist(osp.dirname(args.dst))
     torch.save(torch_weights, args.dst)
 
 

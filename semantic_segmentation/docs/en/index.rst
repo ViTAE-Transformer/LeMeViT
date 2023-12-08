@@ -1,35 +1,17 @@
 Welcome to MMSegmentation's documentation!
-===========================================
+=======================================
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: Get Started
 
-   overview.md
    get_started.md
 
 .. toctree::
-   :maxdepth: 2
-   :caption: User Guides
-
-   user_guides/index.rst
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Advanced Guides
-
-   advanced_guides/index.rst
-
-.. toctree::
    :maxdepth: 1
-   :caption: Migration
+   :caption: Dataset Preparation
 
-   migration/index.rst
-
-.. toctree::
-   :caption: API Reference
-
-   api.rst
+   dataset_prepare.md
 
 .. toctree::
    :maxdepth: 1
@@ -39,22 +21,40 @@ Welcome to MMSegmentation's documentation!
    modelzoo_statistics.md
 
 .. toctree::
-   :maxdepth: 1
-   :caption: Notes
+   :maxdepth: 2
+   :caption: Quick Run
 
-   notes/changelog.md
-   notes/faq.md
+   train.md
+   inference.md
 
 .. toctree::
-   :caption: Device Support
+   :maxdepth: 2
+   :caption: Tutorials
 
-   device/npu.md
+   tutorials/index.rst
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Useful Tools and Scripts
+
+   useful_tools.md
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Notes
+
+   changelog.md
+   faq.md
 
 .. toctree::
    :caption: Switch Language
 
    switch_language.md
 
+.. toctree::
+   :caption: API Reference
+
+   api.rst
 
 Indices and tables
 ==================

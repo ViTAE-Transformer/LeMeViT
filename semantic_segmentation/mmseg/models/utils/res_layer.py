@@ -1,6 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 from mmcv.cnn import build_conv_layer, build_norm_layer
-from mmengine.model import Sequential
+from mmcv.runner import Sequential
 from torch import nn as nn
 
 
@@ -93,4 +93,4 @@ class ResLayer(Sequential):
                     conv_cfg=conv_cfg,
                     norm_cfg=norm_cfg,
                     **kwargs))
-        super().__init__(*layers)
+        super(ResLayer, self).__init__(*layers)

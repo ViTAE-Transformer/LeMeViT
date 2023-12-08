@@ -3,12 +3,12 @@ import torch
 import torch.nn as nn
 from mmcv.cnn import ConvModule
 
-from mmseg.registry import MODELS
-from ..utils import Upsample
+from mmseg.ops import Upsample
+from ..builder import HEADS
 from .decode_head import BaseDecodeHead
 
 
-@MODELS.register_module()
+@HEADS.register_module()
 class SETRMLAHead(BaseDecodeHead):
     """Multi level feature aggretation head of SETR.
 
@@ -21,7 +21,8 @@ class SETRMLAHead(BaseDecodeHead):
     """
 
     def __init__(self, mla_channels=128, up_scale=4, **kwargs):
-        super().__init__(input_transform='multiple_select', **kwargs)
+        super(SETRMLAHead, self).__init__(
+            input_transform='multiple_select', **kwargs)
         self.mla_channels = mla_channels
 
         num_inputs = len(self.in_channels)

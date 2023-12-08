@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from mmcv.cnn import ConvModule
 
-from mmseg.registry import MODELS
+from ..builder import HEADS
 from ..utils import SelfAttentionBlock as _SelfAttentionBlock
 from .decode_head import BaseDecodeHead
 
@@ -22,7 +22,7 @@ class SelfAttentionBlock(_SelfAttentionBlock):
     """
 
     def __init__(self, in_channels, channels, conv_cfg, norm_cfg, act_cfg):
-        super().__init__(
+        super(SelfAttentionBlock, self).__init__(
             key_in_channels=in_channels,
             query_in_channels=in_channels,
             channels=channels,
@@ -51,11 +51,11 @@ class SelfAttentionBlock(_SelfAttentionBlock):
 
     def forward(self, x):
         """Forward function."""
-        context = super().forward(x, x)
+        context = super(SelfAttentionBlock, self).forward(x, x)
         return self.output_project(context)
 
 
-@MODELS.register_module()
+@HEADS.register_module()
 class ISAHead(BaseDecodeHead):
     """Interlaced Sparse Self-Attention for Semantic Segmentation.
 
@@ -68,7 +68,7 @@ class ISAHead(BaseDecodeHead):
     """
 
     def __init__(self, isa_channels, down_factor=(8, 8), **kwargs):
-        super().__init__(**kwargs)
+        super(ISAHead, self).__init__(**kwargs)
         self.down_factor = down_factor
 
         self.in_conv = ConvModule(

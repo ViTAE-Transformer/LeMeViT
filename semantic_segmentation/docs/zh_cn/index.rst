@@ -8,27 +8,10 @@
    get_started.md
 
 .. toctree::
-   :maxdepth: 2
-   :caption: 用户指南
-
-   user_guides/index.rst
-
-.. toctree::
-   :maxdepth: 2
-   :caption: 进阶指南
-
-   advanced_guides/index.rst
-
-.. toctree::
    :maxdepth: 1
-   :caption: 迁移指引
+   :caption: 数据集准备
 
-   migration/index.rst
-
-.. toctree::
-   :caption: 接口文档（英文）
-
-   api.rst
+   dataset_prepare.md
 
 .. toctree::
    :maxdepth: 1
@@ -36,6 +19,25 @@
 
    model_zoo.md
    modelzoo_statistics.md
+
+.. toctree::
+   :maxdepth: 2
+   :caption: 快速启动
+
+   train.md
+   inference.md
+
+.. toctree::
+   :maxdepth: 2
+   :caption: 教程
+
+   tutorials/index.rst
+
+.. toctree::
+   :maxdepth: 2
+   :caption: 实用工具与脚本
+
+   useful_tools.md
 
 .. toctree::
    :maxdepth: 2
@@ -49,6 +51,10 @@
 
    switch_language.md
 
+.. toctree::
+   :caption: 接口文档（英文）
+
+   api.rst
 
 Indices and tables
 ==================

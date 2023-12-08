@@ -1,9 +1,8 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 from argparse import ArgumentParser
 
-from mmengine.model import revert_sync_batchnorm
-
-from mmseg.apis import inference_model, init_model, show_result_pyplot
+from mmseg.apis import inference_segmentor, init_segmentor, show_result_pyplot
+from mmseg.core.evaluation import get_palette
 
 
 def main():
@@ -15,29 +14,27 @@ def main():
     parser.add_argument(
         '--device', default='cuda:0', help='Device used for inference')
     parser.add_argument(
+        '--palette',
+        default='cityscapes',
+        help='Color palette used for segmentation map')
+    parser.add_argument(
         '--opacity',
         type=float,
         default=0.5,
         help='Opacity of painted segmentation map. In (0, 1] range.')
-    parser.add_argument(
-        '--title', default='result', help='The image identifier.')
     args = parser.parse_args()
 
     # build the model from a config file and a checkpoint file
-    model = init_model(args.config, args.checkpoint, device=args.device)
-    if args.device == 'cpu':
-        model = revert_sync_batchnorm(model)
+    model = init_segmentor(args.config, args.checkpoint, device=args.device)
     # test a single image
-    result = inference_model(model, args.img)
+    result = inference_segmentor(model, args.img)
     # show the results
     show_result_pyplot(
         model,
         args.img,
         result,
-        title=args.title,
+        get_palette(args.palette),
         opacity=args.opacity,
-        draw_gt=False,
-        show=False if args.out_file is not None else True,
         out_file=args.out_file)
 
 

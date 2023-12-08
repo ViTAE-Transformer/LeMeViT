@@ -36,12 +36,11 @@ def test_tversky_lose():
     import os
     import tempfile
 
-    import mmengine
+    import mmcv
     import numpy as np
     tmp_file = tempfile.NamedTemporaryFile()
 
-    mmengine.dump([1.0, 2.0, 3.0], f'{tmp_file.name}.pkl',
-                  'pkl')  # from pkl file
+    mmcv.dump([1.0, 2.0, 3.0], f'{tmp_file.name}.pkl', 'pkl')  # from pkl file
     loss_cfg = dict(
         type='TverskyLoss',
         class_weight=f'{tmp_file.name}.pkl',

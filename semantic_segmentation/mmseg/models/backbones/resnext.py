@@ -3,7 +3,7 @@ import math
 
 from mmcv.cnn import build_conv_layer, build_norm_layer
 
-from mmseg.registry import MODELS
+from ..builder import BACKBONES
 from ..utils import ResLayer
 from .resnet import Bottleneck as _Bottleneck
 from .resnet import ResNet
@@ -23,7 +23,7 @@ class Bottleneck(_Bottleneck):
                  base_width=4,
                  base_channels=64,
                  **kwargs):
-        super().__init__(inplanes, planes, **kwargs)
+        super(Bottleneck, self).__init__(inplanes, planes, **kwargs)
 
         if groups == 1:
             width = self.planes
@@ -84,7 +84,7 @@ class Bottleneck(_Bottleneck):
         self.add_module(self.norm3_name, norm3)
 
 
-@MODELS.register_module()
+@BACKBONES.register_module()
 class ResNeXt(ResNet):
     """ResNeXt backbone.
 
@@ -139,7 +139,7 @@ class ResNeXt(ResNet):
     def __init__(self, groups=1, base_width=4, **kwargs):
         self.groups = groups
         self.base_width = base_width
-        super().__init__(**kwargs)
+        super(ResNeXt, self).__init__(**kwargs)
 
     def make_res_layer(self, **kwargs):
         """Pack all blocks in a stage into a ``ResLayer``"""

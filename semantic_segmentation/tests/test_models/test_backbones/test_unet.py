@@ -2,14 +2,11 @@
 import pytest
 import torch
 from mmcv.cnn import ConvModule
-from mmengine.registry import init_default_scope
 
 from mmseg.models.backbones.unet import (BasicConvBlock, DeconvModule,
                                          InterpConv, UNet, UpConvBlock)
-from mmseg.models.utils import Upsample
+from mmseg.ops import Upsample
 from .utils import check_norm_state
-
-init_default_scope('mmseg')
 
 
 def test_unet_basic_conv_block():

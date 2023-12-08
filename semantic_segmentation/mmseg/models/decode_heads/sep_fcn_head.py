@@ -1,11 +1,11 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 from mmcv.cnn import DepthwiseSeparableConvModule
 
-from mmseg.registry import MODELS
+from ..builder import HEADS
 from .fcn_head import FCNHead
 
 
-@MODELS.register_module()
+@HEADS.register_module()
 class DepthwiseSeparableFCNHead(FCNHead):
     """Depthwise-Separable Fully Convolutional Network for Semantic
     Segmentation.
@@ -32,7 +32,7 @@ class DepthwiseSeparableFCNHead(FCNHead):
     """
 
     def __init__(self, dw_act_cfg=None, **kwargs):
-        super().__init__(**kwargs)
+        super(DepthwiseSeparableFCNHead, self).__init__(**kwargs)
         self.convs[0] = DepthwiseSeparableConvModule(
             self.in_channels,
             self.channels,

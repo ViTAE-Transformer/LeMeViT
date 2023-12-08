@@ -2,11 +2,11 @@
 import torch
 from mmcv.cnn import NonLocal2d
 
-from mmseg.registry import MODELS
+from ..builder import HEADS
 from .fcn_head import FCNHead
 
 
-@MODELS.register_module()
+@HEADS.register_module()
 class NLHead(FCNHead):
     """Non-local Neural Networks.
 
@@ -26,7 +26,7 @@ class NLHead(FCNHead):
                  use_scale=True,
                  mode='embedded_gaussian',
                  **kwargs):
-        super().__init__(num_convs=2, **kwargs)
+        super(NLHead, self).__init__(num_convs=2, **kwargs)
         self.reduction = reduction
         self.use_scale = use_scale
         self.mode = mode

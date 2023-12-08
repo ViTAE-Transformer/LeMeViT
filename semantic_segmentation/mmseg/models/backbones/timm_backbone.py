@@ -4,13 +4,13 @@ try:
 except ImportError:
     timm = None
 
-from mmengine.model import BaseModule
-from mmengine.registry import MODELS as MMENGINE_MODELS
+from mmcv.cnn.bricks.registry import NORM_LAYERS
+from mmcv.runner import BaseModule
 
-from mmseg.registry import MODELS
+from ..builder import BACKBONES
 
 
-@MODELS.register_module()
+@BACKBONES.register_module()
 class TIMMBackbone(BaseModule):
     """Wrapper to use backbones from timm library. More details can be found in
     `timm <https://github.com/rwightman/pytorch-image-models>`_ .
@@ -37,9 +37,9 @@ class TIMMBackbone(BaseModule):
     ):
         if timm is None:
             raise RuntimeError('timm is not installed')
-        super().__init__(init_cfg)
+        super(TIMMBackbone, self).__init__(init_cfg)
         if 'norm_layer' in kwargs:
-            kwargs['norm_layer'] = MMENGINE_MODELS.get(kwargs['norm_layer'])
+            kwargs['norm_layer'] = NORM_LAYERS.get(kwargs['norm_layer'])
         self.timm_model = timm.create_model(
             model_name=model_name,
             features_only=features_only,

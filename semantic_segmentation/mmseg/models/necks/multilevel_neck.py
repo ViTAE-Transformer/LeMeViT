@@ -1,13 +1,12 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import torch.nn as nn
-from mmcv.cnn import ConvModule
-from mmengine.model.weight_init import xavier_init
+from mmcv.cnn import ConvModule, xavier_init
 
-from mmseg.registry import MODELS
-from ..utils import resize
+from mmseg.ops import resize
+from ..builder import NECKS
 
 
-@MODELS.register_module()
+@NECKS.register_module()
 class MultiLevelNeck(nn.Module):
     """MultiLevelNeck.
 
@@ -29,7 +28,7 @@ class MultiLevelNeck(nn.Module):
                  scales=[0.5, 1, 2, 4],
                  norm_cfg=None,
                  act_cfg=None):
-        super().__init__()
+        super(MultiLevelNeck, self).__init__()
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels

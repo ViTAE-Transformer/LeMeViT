@@ -1,7 +1,10 @@
+
+
 version: 2.1
 
 # the default pipeline parameters, which will be updated according to
 # the results of the path-filtering orb
+
 parameters:
   lint_only:
     type: boolean
@@ -14,6 +17,12 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Install dependencies
+          command: |
+            sudo apt-add-repository ppa:brightbox/ruby-ng -y
+            sudo apt-get update
+            sudo apt-get install -y ruby2.7
+      - run:
           name: Install pre-commit hook
           command: |
             pip install pre-commit
@@ -25,13 +34,15 @@ jobs:
           name: Check docstring coverage
           command: |
             pip install interrogate
-            interrogate -v --ignore-init-method --ignore-module --ignore-nested-functions --ignore-magic --ignore-regex "__repr__" --fail-under 75 mmseg
+            interrogate -v --ignore-init-method --ignore-module --ignore-nested-functions --ignore-regex "__repr__" --fail-under 50 mmseg
+
   build_cpu:
     parameters:
       # The python version must match available image tags in
       # https://circleci.com/developer/images/image/cimg/python
       python:
         type: string
+        default: "3.7.4"
       torch:
         type: string
       torchvision:
@@ -42,6 +53,11 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Get MMCV_TORCH as environment variables
+          command: |
+            . .circleci/scripts/get_mmcv_var.sh << parameters.torch >>
+            source $BASH_ENV
+      - run:
           name: Install Libraries
           command: |
             sudo apt-get update
@@ -49,33 +65,29 @@ jobs:
       - run:
           name: Configure Python & pip
           command: |
-            pip install --upgrade pip
-            pip install wheel
+            python -m pip install --upgrade pip
+            python -m pip install wheel
       - run:
           name: Install PyTorch
           command: |
             python -V
-            pip install torch==<< parameters.torch >>+cpu torchvision==<< parameters.torchvision >>+cpu -f https://download.pytorch.org/whl/torch_stable.html
+            python -m pip install torch==<< parameters.torch >>+cpu torchvision==<< parameters.torchvision >>+cpu -f https://download.pytorch.org/whl/torch_stable.html
       - run:
           name: Install mmseg dependencies
           command: |
-            pip install git+https://github.com/open-mmlab/mmengine.git@main
-            pip install -U openmim
-            mim install mmcv>=2.0.0
-            pip install mmpretrain>=1.0.0rc7
-            pip install mmdet>=3.0.0
-            pip install -r requirements/tests.txt -r requirements/optional.txt
-            python -m pip install albumentations>=0.3.2 --no-binary qudida,albumentations
+            python -m pip install mmcv-full -f https://download.openmmlab.com/mmcv/dist/cpu/torch<< parameters.torch >>/index.html
+            python -m pip install -r requirements.txt
       - run:
           name: Build and install
           command: |
-            pip install -e .
+            python -m pip install -e .
       - run:
-          name: Skip timm unittests and generate coverage report
+          name: Run unittests but skip timm unittests
           command: |
-            python -m coverage run --branch --source mmseg -m pytest tests/ --ignore tests/test_models/test_backbones/test_timm_backbone.py --ignore tests/test_apis/test_rs_inferencer.py
+            python -m coverage run --branch --source mmseg -m pytest tests/ --ignore tests/test_models/test_backbones/test_timm_backbone.py
             python -m coverage xml
             python -m coverage report -m
+
   build_cuda:
     parameters:
       torch:
@@ -87,39 +99,26 @@ jobs:
         type: integer
         default: 7
     machine:
-      image: linux-cuda-11:default
+      image: ubuntu-2004-cuda-11.4:202110-01
       docker_layer_caching: true
-    resource_class: gpu.nvidia.small.multi
+    resource_class: gpu.nvidia.small
     steps:
       - checkout
       - run:
-          name: Install nvidia-container-toolkit and Restart Docker
+          name: Get MMCV_TORCH and MMCV_CUDA as environment variables
           command: |
-            sudo apt-get update
-            sudo apt-get install -y nvidia-container-toolkit
-            sudo systemctl restart docker
-      - run:
-          # Cloning repos in VM since Docker doesn't have access to the private key
-          name: Clone Repos
-          command: |
-            git clone -b main --depth 1 https://github.com/open-mmlab/mmengine.git /home/circleci/mmengine
+            . .circleci/scripts/get_mmcv_var.sh << parameters.torch >> << parameters.cuda >>
+            source $BASH_ENV
       - run:
           name: Build Docker image
           command: |
             docker build .circleci/docker -t mmseg:gpu --build-arg PYTORCH=<< parameters.torch >> --build-arg CUDA=<< parameters.cuda >> --build-arg CUDNN=<< parameters.cudnn >>
-            docker run --gpus all -t -d -v /home/circleci/project:/mmseg -v /home/circleci/mmengine:/mmengine -v /home/circleci/mmpretrain:/mmpretrain -v /home/circleci/mmdetection:/mmdetection -w /mmseg --name mmseg mmseg:gpu
+            docker run --gpus all -t -d -v /home/circleci/project:/mmseg -w /mmseg --name mmseg mmseg:gpu
       - run:
           name: Install mmseg dependencies
           command: |
-            docker exec mmseg pip install -e /mmengine
-            docker exec mmseg pip install -U openmim
-            docker exec mmseg mim install mmcv>=2.0.0
-            docker exec mmseg pip install mmpretrain>=1.0.0rc7
-            docker exec mmseg mim install mmdet>=3.0.0
-            docker exec mmseg apt-get update
-            docker exec mmseg apt-get install -y git
-            docker exec mmseg pip install -r requirements/tests.txt -r requirements/optional.txt
-            docker exec mmseg python -m pip install albumentations>=0.3.2 --no-binary qudida,albumentations
+            docker exec mmseg pip install mmcv-full -f https://download.openmmlab.com/mmcv/dist/${MMCV_CUDA}/torch${MMCV_TORCH}/index.html
+            docker exec mmseg pip install -r requirements.txt
       - run:
           name: Build and install
           command: |
@@ -127,7 +126,8 @@ jobs:
       - run:
           name: Run unittests but skip timm unittests
           command: |
-            docker exec mmseg pytest tests/ --ignore tests/test_models/test_backbones/test_timm_backbone.py --ignore tests/test_models/test_backbones/test_timm_backbone.py --ignore tests/test_apis/test_rs_inferencer.py
+            docker exec mmseg python -m pytest tests/ --ignore tests/test_models/test_backbones/test_timm_backbone.py
+
 workflows:
   pr_stage_lint:
     when: << pipeline.parameters.lint_only >>
@@ -137,8 +137,7 @@ workflows:
           filters:
             branches:
               ignore:
-                - dev-1.x
-                - main
+                - master
   pr_stage_test:
     when:
       not:
@@ -149,21 +148,19 @@ workflows:
           filters:
             branches:
               ignore:
-                - dev-1.x
-                - main
+                - master
       - build_cpu:
           name: minimum_version_cpu
-          torch: 1.8.1
-          torchvision: 0.9.1
-          python: "3.7"
+          torch: 1.6.0
+          torchvision: 0.7.0
+          python: 3.7.7
           requires:
             - lint
       - build_cpu:
           name: maximum_version_cpu
-          # TODO: Fix torch 1.13 forward crush
-          torch: 1.12.0
-          torchvision: 0.13.0
-          python: 3.9.0
+          torch: 1.9.0
+          torchvision: 0.10.0
+          python: 3.8.0
           requires:
             - minimum_version_cpu
       - hold:
@@ -185,12 +182,11 @@ workflows:
     jobs:
       - build_cuda:
           name: minimum_version_gpu
-          torch: 1.8.1
+          torch: 1.6.0
           # Use double quotation mark to explicitly specify its type
           # as string instead of number
-          cuda: "10.2"
+          cuda: "10.1"
           filters:
             branches:
               only:
-                - dev-1.x
-                - main
+                - master

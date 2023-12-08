@@ -2,10 +2,9 @@
 from argparse import ArgumentParser
 
 import cv2
-from mmengine.model.utils import revert_sync_batchnorm
 
-from mmseg.apis import inference_model, init_model
-from mmseg.apis.inference import show_result_pyplot
+from mmseg.apis import inference_segmentor, init_segmentor
+from mmseg.core.evaluation import get_palette
 
 
 def main():
@@ -53,13 +52,9 @@ def main():
         'At least one output should be enabled.'
 
     # build the model from a config file and a checkpoint file
-    model = init_model(args.config, args.checkpoint, device=args.device)
-    if args.device == 'cpu':
-        model = revert_sync_batchnorm(model)
+    model = init_segmentor(args.config, args.checkpoint, device=args.device)
 
     # build input video
-    if args.video.isdigit():
-        args.video = int(args.video)
     cap = cv2.VideoCapture(args.video)
     assert (cap.isOpened())
     input_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
@@ -88,10 +83,15 @@ def main():
                 break
 
             # test a single image
-            result = inference_model(model, frame)
+            result = inference_segmentor(model, frame)
 
             # blend raw image and prediction
-            draw_img = show_result_pyplot(model, frame, result)
+            draw_img = model.show_result(
+                frame,
+                result,
+                palette=get_palette(args.palette),
+                show=False,
+                opacity=args.opacity)
 
             if args.show:
                 cv2.imshow('video_demo', draw_img)

@@ -3,7 +3,7 @@ import torch
 from mmcv.cnn import NonLocal2d
 from torch import nn
 
-from mmseg.registry import MODELS
+from ..builder import HEADS
 from .fcn_head import FCNHead
 
 
@@ -89,7 +89,7 @@ class DisentangledNonLocal2d(NonLocal2d):
         return output
 
 
-@MODELS.register_module()
+@HEADS.register_module()
 class DNLHead(FCNHead):
     """Disentangled Non-Local Neural Networks.
 
@@ -111,7 +111,7 @@ class DNLHead(FCNHead):
                  mode='embedded_gaussian',
                  temperature=0.05,
                  **kwargs):
-        super().__init__(num_convs=2, **kwargs)
+        super(DNLHead, self).__init__(num_convs=2, **kwargs)
         self.reduction = reduction
         self.use_scale = use_scale
         self.mode = mode
