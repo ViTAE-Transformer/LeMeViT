@@ -6,3 +6,4 @@ __pycache__
 /datasets/
 backup
 *.backup*
+work_dirs

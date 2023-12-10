@@ -28,7 +28,7 @@ from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
 
-from mmdet.utils import get_root_logger
+from mmseg.utils import get_root_logger
 from mmcv.runner import _load_checkpoint, BaseModule
 
 from ..builder import BACKBONES
@@ -785,7 +785,15 @@ class MixFormer(BaseModule):
 
             self.load_state_dict(state_dict, False)
         
-    
+    def train(self, mode=True):
+        freeze_bn = False
+        super(MixFormer, self).train(mode)
+        if freeze_bn:
+            for m in self.model.modules():
+                if isinstance(m, nn.BatchNorm2d):
+                    m.eval()
+                if isinstance(m, nn.LayerNorm):
+                    m.eval()
 
 
 #################### model variants #######################
