@@ -88,7 +88,7 @@ def draw_obb(ax,
                     verticalalignment='bottom',
                     horizontalalignment='left')
 
-        patches.append(Rectangle((x, y), w, h, angle))
+        patches.append(Rectangle((x, y), w, h, angle=angle))
         edge_colors.append(color)
 
     if patches:

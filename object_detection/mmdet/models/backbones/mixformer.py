@@ -742,15 +742,14 @@ class MixFormer(nn.Module):
     def train(self, mode=True):
         self._freeze_stages()
         freeze_bn = False
-        bn_requires_grad = True
         super(MixFormer, self).train(mode)
         if freeze_bn:
             for m in self.model.modules():
                 if isinstance(m, nn.BatchNorm2d):
                     m.eval()
-            if not bn_requires_grad:
-                m.weight.requires_grad = False
-                m.bias.requires_grad = False
+                if isinstance(m, nn.LayerNorm):
+                    m.eval()
+
                 
     def init_weights(self, pretrained=None):
         if pretrained != None:

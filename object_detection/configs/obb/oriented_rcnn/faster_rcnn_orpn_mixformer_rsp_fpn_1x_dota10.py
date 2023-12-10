@@ -1,14 +1,10 @@
 _base_ = [
     '../_base_/datasets/dota.py',
-    '../_base_/schedules/schedule_1x.py',
+    '../_base_/schedules/schedule_3x.py',
     '../../_base_/default_runtime.py'
 ]
 
-optimizer = dict(_delete_=True, type='AdamW', lr=0.0001, betas=(0.9, 0.999), weight_decay=0.05,
-                 paramwise_cfg=dict(custom_keys={'absolute_pos_embed': dict(decay_mult=0.),
-                                                 'relative_position_bias_table': dict(decay_mult=0.),
-                                                 'norm': dict(decay_mult=0.)}))
-lr_config = dict(step=[8, 11])
+optimizer = dict(_delete_=True, type='AdamW', lr=0.0001, betas=(0.9, 0.999), weight_decay=0.05)
 
 #optimizer = dict(type='SGD', lr=0.0025, momentum=0.9, weight_decay=0.0001)
 # RetinaNet nms is slow in early stage, disable every epoch evaluation
@@ -35,6 +31,7 @@ model = dict(
         mlp_dwconv=False,
         representation_size=None,
         layer_scale_init_value=-1,
+        frozen_stages= [-1],
         ),
     neck=dict(
         type='FPN',
@@ -141,6 +138,6 @@ test_cfg = dict(
 
 
 data = dict(
-    samples_per_gpu=4,
+    samples_per_gpu=8,
     workers_per_gpu=4
 )

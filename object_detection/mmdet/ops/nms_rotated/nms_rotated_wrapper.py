@@ -15,26 +15,26 @@ def obb2hbb(obboxes):
 
 
 def obb_nms(dets, iou_thr, device_id=None):
+    device = 'cpu' if device_id is None else f'cuda:{device_id}'
     if isinstance(dets, torch.Tensor):
         is_numpy = False
-        dets_th = dets
+        dets_th = dets.to(device)
     elif isinstance(dets, np.ndarray):
         is_numpy = True
-        device = 'cpu' if device_id is None else f'cuda:{device_id}'
         dets_th = torch.from_numpy(dets).to(device)
     else:
         raise TypeError('dets must be eithr a Tensor or numpy array, '
                         f'but got {type(dets)}')
 
     if dets_th.numel() == 0:
-        inds = dets_th.new_zeros(0, dtype=torch.int64)
+        inds = dets_th.new_zeros(0, dtype=torch.int64).to(device)
     else:
         # same bug will happen when bboxes is too small
-        too_small = dets_th[:, [2, 3]].min(1)[0] < 0.001
+        too_small = (dets_th[:, [2, 3]].min(1)[0] < 0.001).to(device)
         if too_small.all():
-            inds = dets_th.new_zeros(0, dtype=torch.int64)
+            inds = dets_th.new_zeros(0, dtype=torch.int64).to(device)
         else:
-            ori_inds = torch.arange(dets_th.size(0))
+            ori_inds = torch.arange(dets_th.size(0)).to(device)
             ori_inds = ori_inds[~too_small]
             dets_th = dets_th[~too_small]
 

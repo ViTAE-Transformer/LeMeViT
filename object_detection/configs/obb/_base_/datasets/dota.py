@@ -66,7 +66,7 @@ test_pipeline = [
 # disable evluation, only need train and test
 # uncomments it when use trainval as train
 data = dict(
-    samples_per_gpu=2,
+    samples_per_gpu=8,
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
