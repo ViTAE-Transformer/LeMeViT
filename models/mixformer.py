@@ -27,6 +27,7 @@ from timm.models.vision_transformer import _cfg
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
+from visualizer import get_local
 
 try:
     from flash_attn import flash_attn_qkvpacked_func, flash_attn_kvpacked_func, flash_attn_func
@@ -148,7 +149,7 @@ class StandardAttention(nn.Module):
         super().__init__()
         assert dim % num_heads == 0, f"dim {dim} not divisible by num_heads {num_heads}"
         self.num_heads = num_heads
-
+        
         self.use_flash_attn = has_flash_attn
         self.use_xformers = has_xformers and (dim // num_heads) % 32 == 0
 
@@ -159,7 +160,9 @@ class StandardAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
 
         self.attn_viz = nn.Identity() 
-
+        self.scale = dim**0.5
+        
+    @get_local('attn_map')
     def forward(self, x):
         if self.use_flash_attn:
             qkv = self.qkv(x)
@@ -181,7 +184,12 @@ class StandardAttention(nn.Module):
             x = F.scaled_dot_product_attention(q, k, v)  # B N h d
             x = rearrange(x, "B h N d -> B N (h d)").contiguous()
             x = self.proj(x)
+        with torch.no_grad():
+            attn = (q @ k.transpose(-2, -1)) * self.scale
+            attn_map = attn.softmax(dim=-1)
+            # print("Standard:", attn_map)
         return x
+
 
 class MixAttention(nn.Module):
     
@@ -212,7 +220,8 @@ class MixAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
 
         self.attn_viz = nn.Identity() 
-
+        
+    @get_local('attn_map')
     def forward(self, x, c):
         B, N, C = x.shape        
         B, M, _ = c.shape 
@@ -264,6 +273,10 @@ class MixAttention(nn.Module):
             c = F.scaled_dot_product_attention(q2, k1, v1, scale=scale_c)  # B N h d
             c = rearrange(c, "B h M d -> B M (h d)").contiguous()
             c = self.proj_c(c)
+        with torch.no_grad():   
+            attn = (q1 @ k2.transpose(-2, -1)) * scale_x
+            attn_map = attn.softmax(dim=-1)
+            # print("Mix:", attn_map)
         return x, c
     
 class MixAttention_v2(nn.Module):
@@ -763,6 +776,37 @@ def mixformer_tiny(pretrained=False, pretrained_cfg=None,
     model = MixFormer(
         depth=[2, 2, 2, 4, 2],
         embed_dim=[96, 96, 192, 320, 384], 
+        head_dim=32,
+        mlp_ratios=[4, 4, 4, 4, 4],
+        attn_type=["STEM","M","M","S","S"],
+        queries_len=16,
+        qkv_bias=True,
+        qk_scale=None,
+        attn_drop=0.,
+        qk_dims=None,
+        cpe_ks=3,
+        pre_norm=True,
+        mlp_dwconv=False,
+        representation_size=None,
+        layer_scale_init_value=-1,
+        use_checkpoint_stages=[],
+        **kwargs)
+    model.default_cfg = _cfg()
+
+    # if pretrained:
+    #     model_key = 'biformer_tiny_in1k'
+    #     url = model_urls[model_key]
+    #     checkpoint = torch.hub.load_state_dict_from_url(url=url, map_location="cpu", check_hash=True, file_name=f"{model_key}.pth")
+    #     model.load_state_dict(checkpoint["model"])
+
+    return model
+
+@register_model
+def mixformer_tiny_2(pretrained=False, pretrained_cfg=None,
+                  pretrained_cfg_overlay=None, **kwargs):
+    model = MixFormer(
+        depth=[2, 2, 2, 6, 2],
+        embed_dim=[96, 96, 192, 320, 480], 
         head_dim=32,
         mlp_ratios=[4, 4, 4, 4, 4],
         attn_type=["STEM","M","M","S","S"],

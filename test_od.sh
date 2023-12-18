@@ -7,9 +7,9 @@ CUDA_VISIBLE_DEVICES="3" \
     --nproc_per_node 1 \
     object_detection/tools/test.py \
     object_detection/configs/obb/oriented_rcnn/faster_rcnn_orpn_mixformer_rsp_fpn_1x_dota10.py \
-    outputs/object_detection/exp6/epoch_36.pth \
-    --format-only --options save_dir=outputs/object_detection/exp6/results nproc=1 \
-    # --show --show-dir outputs/object_detection/exp6/vis 
+    outputs/object_detection/exp7/epoch_36.pth \
+    --format-only --options save_dir=outputs/object_detection/exp7/results nproc=1 \
+    --show --show-dir outputs/object_detection/exp7/vis 
 
 
 # OMP_NUM_THREADS=1 \

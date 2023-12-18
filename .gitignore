@@ -7,3 +7,4 @@ __pycache__
 backup
 *.backup*
 work_dirs
+benchmark.txt

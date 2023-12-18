@@ -378,7 +378,8 @@ class FcaFormer(nn.Module):
                  layer_scale_init_value=1e-6,
                  drop_path_rate=0.1,
                  head_init_scale=1.0,
-                 cab_max_d = 12
+                 cab_max_d = 12,
+                 **kwargs
                  ):
         super().__init__()
 

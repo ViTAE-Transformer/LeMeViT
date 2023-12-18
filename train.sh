@@ -21,8 +21,9 @@ CUDA_VISIBLE_DEVICES="4,5,6,7" \
     --nproc_per_node 4 \
     main.py \
     --config configs/mixformer_scene_recognition.yaml \
-    --output outputs/scene_recognition \
-    --experiment exp6 \
+    --output outputs/visulization \
+    --experiment exp1 \
     --model mixformer_tiny \
+    --initial-checkpoint outputs/scene_recognition/mixformer_tiny_224/exp6/model_best.pth.tar \
     --img-size 224 \
     --batch-size 256

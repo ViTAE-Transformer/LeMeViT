@@ -578,13 +578,13 @@ class PaCaViT(nn.Module):
             type="DownsampleV1",
             patch_size=4,
             kernel_size=3,
-            norm_cfg=dict(type="LayerNorm2d", eps=1e-6),
+            norm_cfg=dict(type="BN2d", eps=1e-6),
         ),
         trans_cfg=dict(
             type="DownsampleV1",
             patch_size=2,
             kernel_size=3,
-            norm_cfg=dict(type="LayerNorm2d", eps=1e-6),
+            norm_cfg=dict(type="BN2d", eps=1e-6),
         ),
         arch_cfg=dict(
             embed_dims=[96, 192, 320, 384],
@@ -1217,7 +1217,7 @@ def pacavit_small_p2cconv_100_49(pretrained=False, **kwargs):
     )
 
     model = PaCaViT(**args)
- 
+
     model.pretrained_cfg = _cfg()
 
     if pretrained:
