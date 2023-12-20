@@ -41,9 +41,27 @@ try:
 except ImportError:
     has_xformers = False
 
+try:
+    from torch.nn.functional import scaled_dot_product_attention
+    has_torchfunc = True
+except ImportError:
+    has_torchfunc = False
+
 
 has_flash_attn = False
 has_xformers = False
+
+def scaled_dot_product_attention(q, k, v, scale=None):
+    """Custom Scaled-Dot Product Attention
+        dim (B h N d)
+    """
+    _,_,_,dim = q.shape
+    scale = scale or dim**(-0.5)
+    attn = q @ k.transpose(-1,-2) * scale
+    attn = attn.softmax(dim=-1)
+    x = attn @ v
+    return x
+
 
 class DWConv(nn.Module):
     def __init__(self, dim=768):
@@ -152,6 +170,7 @@ class StandardAttention(nn.Module):
         
         self.use_flash_attn = has_flash_attn
         self.use_xformers = has_xformers and (dim // num_heads) % 32 == 0
+        self.use_torchfunc = has_torchfunc
 
         self.qkv = nn.Linear(dim, 3 * dim)
         self.attn_drop = attn_drop
@@ -177,11 +196,18 @@ class StandardAttention(nn.Module):
             x = xops.memory_efficient_attention(q, k, v)  # B N h d
             x = rearrange(x, "B N h d -> B N (h d)").contiguous()
             x = self.proj(x)
-        else:
+        elif self.use_torchfunc:
             qkv = self.qkv(x)
             qkv = rearrange(qkv, "B N (x h d) -> x B h N d", x=3, h=self.num_heads).contiguous()
             q, k, v = qkv[0], qkv[1], qkv[2]
             x = F.scaled_dot_product_attention(q, k, v)  # B N h d
+            x = rearrange(x, "B h N d -> B N (h d)").contiguous()
+            x = self.proj(x)
+        else:
+            qkv = self.qkv(x)
+            qkv = rearrange(qkv, "B N (x h d) -> x B h N d", x=3, h=self.num_heads).contiguous()
+            q, k, v = qkv[0], qkv[1], qkv[2]
+            x = scaled_dot_product_attention(q, k, v)  # B N h d
             x = rearrange(x, "B h N d -> B N (h d)").contiguous()
             x = self.proj(x)
         # with torch.no_grad():
@@ -210,6 +236,7 @@ class MixAttention(nn.Module):
 
         self.use_flash_attn = has_flash_attn
         self.use_xformers = has_xformers and (dim // num_heads) % 32 == 0
+        self.use_torchfunc = has_torchfunc
 
         self.qkv1 = nn.Linear(dim, 3 * dim)
         self.qkv2 = nn.Linear(dim, 3 * dim)
@@ -258,7 +285,7 @@ class MixAttention(nn.Module):
             c = xops.memory_efficient_attention(q2, k1, v1, scale=scale_c)  # B N h d
             c = rearrange(c, "B M h d -> B M (h d)").contiguous()
             c = self.proj_c(c)
-        else:
+        elif self.use_torchfunc:
             qkv1 = self.qkv1(x)
             qkv1 = rearrange(qkv1, "B N (x h d) -> x B h N d", x=3, h=self.num_heads).contiguous()
             qkv2 = self.qkv2(c)
@@ -271,6 +298,21 @@ class MixAttention(nn.Module):
             x = rearrange(x, "B h N d -> B N (h d)").contiguous()
             x = self.proj_x(x)
             c = F.scaled_dot_product_attention(q2, k1, v1, scale=scale_c)  # B N h d
+            c = rearrange(c, "B h M d -> B M (h d)").contiguous()
+            c = self.proj_c(c)
+        else:
+            qkv1 = self.qkv1(x)
+            qkv1 = rearrange(qkv1, "B N (x h d) -> x B h N d", x=3, h=self.num_heads).contiguous()
+            qkv2 = self.qkv2(c)
+            qkv2 = rearrange(qkv2, "B M (x h d) -> x B h M d", x=3, h=self.num_heads).contiguous()
+            
+            q1, k1, v1 = qkv1[0], qkv1[1], qkv1[2]
+            q2, k2, v2 = qkv2[0], qkv2[1], qkv2[2]
+            
+            x = scaled_dot_product_attention(q1, k2, v2, scale=scale_x)  # B N h d
+            x = rearrange(x, "B h N d -> B N (h d)").contiguous()
+            x = self.proj_x(x)
+            c = scaled_dot_product_attention(q2, k1, v1, scale=scale_c)  # B N h d
             c = rearrange(c, "B h M d -> B M (h d)").contiguous()
             c = self.proj_c(c)
         # with torch.no_grad():   
@@ -298,7 +340,8 @@ class MixAttention_v2(nn.Module):
 
         self.use_flash_attn = has_flash_attn
         self.use_xformers = has_xformers and (dim // num_heads) % 32 == 0
-
+        self.use_torchfunc = has_torchfunc
+        
         self.qv1 = nn.Linear(dim, 2 * dim)
         self.kv2 = nn.Linear(dim, 2 * dim)
         self.attn_drop = nn.Dropout(attn_drop)
@@ -345,7 +388,7 @@ class MixAttention_v2(nn.Module):
             c = xops.memory_efficient_attention(k, q, v1, scale=scale_c)
             c = rearrange(c, "B h M d -> B M (h d)").contiguous()
             c = self.proj_c(c)
-        else:
+        elif self.use_torchfunc:
             qv1 = self.qv1(x)
             qv1 = rearrange(qv1, "B N (x h d) -> x B h N d", x=2, h=self.num_heads).contiguous()
             kv2 = self.kv2(c)
@@ -358,6 +401,21 @@ class MixAttention_v2(nn.Module):
             x = rearrange(x, "B h N d -> B N (h d)").contiguous()
             x = self.proj_x(x)
             c = F.scaled_dot_product_attention(k, q, v1, scale=scale_c)
+            c = rearrange(c, "B h M d -> B M (h d)").contiguous()
+            c = self.proj_c(c)
+        else:
+            qv1 = self.qv1(x)
+            qv1 = rearrange(qv1, "B N (x h d) -> x B h N d", x=2, h=self.num_heads).contiguous()
+            kv2 = self.kv2(c)
+            kv2 = rearrange(kv2, "B M (x h d) -> x B h M d", x=2, h=self.num_heads).contiguous()
+            
+            q, v1 = qv1[0], qv1[1]
+            k, v2 = kv2[0], kv2[1]
+
+            x = scaled_dot_product_attention(q, k, v2, scale=scale_x)
+            x = rearrange(x, "B h N d -> B N (h d)").contiguous()
+            x = self.proj_x(x)
+            c = scaled_dot_product_attention(k, q, v1, scale=scale_c)
             c = rearrange(c, "B h M d -> B M (h d)").contiguous()
             c = self.proj_c(c)
         return x, c
@@ -379,6 +437,7 @@ class StemAttention(nn.Module):
 
         self.use_flash_attn = has_flash_attn
         self.use_xformers = has_xformers and (dim // num_heads) % 32 == 0
+        self.use_torchfunc = has_torchfunc
 
         self.q = nn.Linear(dim, dim)
         self.kv = nn.Linear(dim, 2 * dim)
@@ -413,7 +472,7 @@ class StemAttention(nn.Module):
             c = xops.memory_efficient_attention(q, k, v)
             c = rearrange(c, "B M h d -> B M (h d)").contiguous()
             c = self.proj(c)
-        else:
+        elif self.use_torchfunc:
             q = self.q(c)
             kv = self.kv(x)
             q = rearrange(q, "B M (h d) -> B h M d", h=self.num_heads).contiguous()
@@ -421,6 +480,16 @@ class StemAttention(nn.Module):
             k, v = kv[0], kv[1]
             
             c = F.scaled_dot_product_attention(q, k, v)
+            c = rearrange(c, "B h M d -> B M (h d)").contiguous()
+            c = self.proj(c)
+        else:
+            q = self.q(c)
+            kv = self.kv(x)
+            q = rearrange(q, "B M (h d) -> B h M d", h=self.num_heads).contiguous()
+            kv = rearrange(kv, "B N (x h d) -> x B h N d", x=2, h=self.num_heads).contiguous()
+            k, v = kv[0], kv[1]
+            
+            c = scaled_dot_product_attention(q, k, v)
             c = rearrange(c, "B h M d -> B M (h d)").contiguous()
             c = self.proj(c)
         return c
