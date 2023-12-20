@@ -27,7 +27,7 @@ import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel as NativeDDP
 
 from timm import utils
-from timm.data import create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
+from timm.data import create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset, create_dataset
 from timm.layers import convert_splitbn_model, convert_sync_batchnorm, set_fast_norm
 from timm.loss import JsdCrossEntropy, SoftTargetCrossEntropy, BinaryCrossEntropy, LabelSmoothingCrossEntropy
 from timm.models import create_model, safe_model_name, resume_checkpoint, load_checkpoint
@@ -35,12 +35,9 @@ from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
 from timm.utils import ApexScaler, NativeScaler
 
-from visualizer import get_local
-get_local.activate()
-
 from engine import train_one_epoch, validate
 from models import *
-from data import create_dataset
+# from data import create_dataset
 
 import torchstat, torchinfo, torchsummary
 from calflops import calculate_flops
@@ -333,7 +330,7 @@ def main():
         else:
             if utils.is_primary(args):
                 _logger.info("Using native Torch DistributedDataParallel.")
-            model = NativeDDP(model, device_ids=[device], broadcast_buffers=not args.no_ddp_bb)
+            model = NativeDDP(model, device_ids=[device], broadcast_buffers=not args.no_ddp_bb, find_unused_parameters=True)
         # NOTE: EMA model does not need to be wrapped by DDP
 
     if args.torchcompile:

@@ -24,7 +24,7 @@ weight_decay: 0.05
 sched: cosine
 lr_base: 5.0e-4
 min_lr: 5.0e-6
-warmup_lr: 1.0e-06
+warmup_lr: 5.0e-06
 warmup_epochs: 5
 weight_decay: 2.0e-05
 lr_base_scale: linear
@@ -63,7 +63,7 @@ mixup_mode: batch
 
 # others
 grad_accum_steps: 1
-clip_grad: 5.0
+# clip_grad: 5.0
 aa: rand-m9-mstd0.5-inc1
 color_jitter: 0.4
 decay_rate: 0.1

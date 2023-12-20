@@ -21,5 +21,6 @@ class PotsdamDataset(CustomDataset):
         super(PotsdamDataset, self).__init__(
             img_suffix='.png',
             seg_map_suffix='.png',
-            reduce_zero_label=True,
+            reduce_zero_label=False,
+            ignore_index=5,
             **kwargs)

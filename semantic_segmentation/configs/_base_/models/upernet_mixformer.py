@@ -10,7 +10,7 @@ model = dict(
         head_dim=32,
         mlp_ratios=[4, 4, 4, 4, 4],
         attn_type=["STEM","M","M","S","S"],
-        queries_len=32,
+        queries_len=16,
         qkv_bias=True,
         qk_scale=None,
         attn_drop=0.,
@@ -32,7 +32,7 @@ model = dict(
         norm_cfg=norm_cfg,
         align_corners=False,
         loss_decode=dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, avg_non_ignore=True)
             ),
     auxiliary_head=dict(
         type='FCNHead',
@@ -46,7 +46,7 @@ model = dict(
         norm_cfg=norm_cfg,
         align_corners=False,
         loss_decode=dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=0.4)),
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=0.4, avg_non_ignore=True)),
     # model training and testing settings
     train_cfg=dict(),
     #test_cfg=dict(mode='whole')

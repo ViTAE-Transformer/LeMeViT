@@ -27,7 +27,7 @@ from timm.models.vision_transformer import _cfg
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
-from visualizer import get_local
+# from visualizer import get_local
 
 try:
     from flash_attn import flash_attn_qkvpacked_func, flash_attn_kvpacked_func, flash_attn_func
@@ -162,7 +162,7 @@ class StandardAttention(nn.Module):
         self.attn_viz = nn.Identity() 
         self.scale = dim**0.5
         
-    @get_local('attn_map')
+    # @get_local('attn_map')
     def forward(self, x):
         if self.use_flash_attn:
             qkv = self.qkv(x)
@@ -184,9 +184,9 @@ class StandardAttention(nn.Module):
             x = F.scaled_dot_product_attention(q, k, v)  # B N h d
             x = rearrange(x, "B h N d -> B N (h d)").contiguous()
             x = self.proj(x)
-        with torch.no_grad():
-            attn = (q @ k.transpose(-2, -1)) * self.scale
-            attn_map = attn.softmax(dim=-1)
+        # with torch.no_grad():
+        #     attn = (q @ k.transpose(-2, -1)) * self.scale
+        #     attn_map = attn.softmax(dim=-1)
             # print("Standard:", attn_map)
         return x
 
@@ -221,7 +221,7 @@ class MixAttention(nn.Module):
 
         self.attn_viz = nn.Identity() 
         
-    @get_local('attn_map')
+    # @get_local('attn_map')
     def forward(self, x, c):
         B, N, C = x.shape        
         B, M, _ = c.shape 
@@ -273,9 +273,9 @@ class MixAttention(nn.Module):
             c = F.scaled_dot_product_attention(q2, k1, v1, scale=scale_c)  # B N h d
             c = rearrange(c, "B h M d -> B M (h d)").contiguous()
             c = self.proj_c(c)
-        with torch.no_grad():   
-            attn = (q1 @ k2.transpose(-2, -1)) * scale_x
-            attn_map = attn.softmax(dim=-1)
+        # with torch.no_grad():   
+        #     attn = (q1 @ k2.transpose(-2, -1)) * scale_x
+        #     attn_map = attn.softmax(dim=-1)
             # print("Mix:", attn_map)
         return x, c
     
@@ -610,6 +610,8 @@ class MixFormer(nn.Module):
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         qk_dims = qk_dims or embed_dim
         
+        self.num_stages = len(attn_type)
+        
         ############ downsample layers (patch embeddings) ######################
         self.downsample_layers = nn.ModuleList()
         # NOTE: uniformer uses two 3*3 conv, while in many other transformers this is one 7*7 conv 
@@ -625,7 +627,7 @@ class MixFormer(nn.Module):
             stem = checkpoint_wrapper(stem)
         self.downsample_layers.append(stem)
 
-        for i in range(4):
+        for i in range(self.num_stages-1):
             if attn_type[i] == "STEM":
                 downsample_layer = nn.Identity()
             else:
@@ -651,7 +653,7 @@ class MixFormer(nn.Module):
             nn.LayerNorm(embed_dim[0])
         )
         self.prototype_downsample.append(prototype_downsample)
-        for i in range(4):
+        for i in range(self.num_stages-1):
             prototype_downsample = nn.Sequential(
                 nn.Linear(embed_dim[i], embed_dim[i] * 4),
                 nn.LayerNorm(embed_dim[i] * 4),
@@ -670,7 +672,7 @@ class MixFormer(nn.Module):
         nheads= [dim // head_dim for dim in qk_dims]
         dp_rates=[x.item() for x in torch.linspace(0, drop_path_rate, sum(depth))] 
         cur = 0
-        for i in range(5):
+        for i in range(self.num_stages):
             stage = nn.ModuleList(
                 [MixBlock(dim=embed_dim[i], 
                            attn_drop=attn_drop, proj_drop=drop_rate,
@@ -728,7 +730,7 @@ class MixFormer(nn.Module):
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x, c):
-        for i in range(5): 
+        for i in range(self.num_stages): 
             x = self.downsample_layers[i](x)
             c = self.prototype_downsample[i](c)
             for j, block in enumerate(self.stages[i]):
@@ -792,12 +794,31 @@ def mixformer_tiny(pretrained=False, pretrained_cfg=None,
         use_checkpoint_stages=[],
         **kwargs)
     model.default_cfg = _cfg()
+    
+    return model
 
-    # if pretrained:
-    #     model_key = 'biformer_tiny_in1k'
-    #     url = model_urls[model_key]
-    #     checkpoint = torch.hub.load_state_dict_from_url(url=url, map_location="cpu", check_hash=True, file_name=f"{model_key}.pth")
-    #     model.load_state_dict(checkpoint["model"])
+@register_model
+def sformer_tiny(pretrained=False, pretrained_cfg=None,
+                  pretrained_cfg_overlay=None, **kwargs):
+    model = MixFormer(
+        depth=[2, 2, 4, 2],
+        embed_dim=[96, 192, 320, 384], 
+        head_dim=32,
+        mlp_ratios=[4, 4, 4, 4],
+        attn_type=["S","S","S","S"],
+        queries_len=16,
+        qkv_bias=True,
+        qk_scale=None,
+        attn_drop=0.,
+        qk_dims=None,
+        cpe_ks=3,
+        pre_norm=True,
+        mlp_dwconv=False,
+        representation_size=None,
+        layer_scale_init_value=-1,
+        use_checkpoint_stages=[],
+        **kwargs)
+    model.default_cfg = _cfg()
 
     return model
 

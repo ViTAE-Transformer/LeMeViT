@@ -613,6 +613,7 @@ class MixFormer(BaseModule):
             init_cfg = init_cfg
         else:
             raise TypeError('pretrained must be a str or None')
+        self.init_cfg = init_cfg
         
         ############ downsample layers (patch embeddings) ######################
         self.downsample_layers = nn.ModuleList()
