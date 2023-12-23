@@ -8,11 +8,10 @@ CUDA_VISIBLE_DEVICES="2,3,4,5,6,7" \
     main.py \
     --config configs/mixformer.yaml \
     --output outputs/classification \
-    --experiment exp3 \
+    --experiment exp1 \
     --model mixformer_tiny \
-    --resume outputs/classification/mixformer_tiny_224/exp3/last.pth.tar \
     --img-size 224 \
-    --batch-size 300
+    --batch-size 400
 
 # OMP_NUM_THREADS=1 \
 # CUDA_VISIBLE_DEVICES="2,3,4,5,6,7" \

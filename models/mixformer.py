@@ -624,17 +624,24 @@ class MixBlock(nn.Module):
             if self.use_layer_scale:
                 x = x + self.drop_path(self.gamma1 * self.attn(self.norm1(x))) # (N, H, W, C)
                 x = x + self.drop_path(self.gamma2 * self.mlp(self.norm2(x))) # (N, H, W, C)
+                c = c + self.drop_path(self.gamma1 * self.attn(self.norm1(c))) # (N, H, W, C)
+                c = c + self.drop_path(self.gamma2 * self.mlp(self.norm2(c))) # (N, H, W, C)
             else:
                 x = x + self.drop_path(self.attn(self.norm1(x))) # (N, H, W, C)
                 x = x + self.drop_path(self.mlp(self.norm2(x))) # (N, H, W, C)
+                c = c + self.drop_path(self.attn(self.norm1(c))) # (N, H, W, C)
+                c = c + self.drop_path(self.mlp(self.norm2(c))) # (N, H, W, C)
         else: # https://kexue.fm/archives/9009
             if self.use_layer_scale:
                 x = self.norm1(x + self.drop_path(self.gamma1 * self.attn(x))) # (N, H, W, C)
                 x = self.norm2(x + self.drop_path(self.gamma2 * self.mlp(x))) # (N, H, W, C)
+                c = self.norm1(c + self.drop_path(self.gamma1 * self.attn(c))) # (N, H, W, C)
+                c = self.norm2(c + self.drop_path(self.gamma2 * self.mlp(c))) # (N, H, W, C)
             else:
                 x = self.norm1(x + self.drop_path(self.attn(x))) # (N, H, W, C)
                 x = self.norm2(x + self.drop_path(self.mlp(x))) # (N, H, W, C)
-
+                c = self.norm1(c + self.drop_path(self.attn(c))) # (N, H, W, C)
+                c = self.norm2(c + self.drop_path(self.mlp(c))) # (N, H, W, C)
         x = rearrange(x, "N (H W) C -> N C H W",H=H,W=W)
         # permute back
         # x = x.permute(0, 3, 1, 2) # (N, H, W, C) -> (N, C, H, W)
@@ -845,8 +852,8 @@ class MixFormer(nn.Module):
 def mixformer_tiny(pretrained=False, pretrained_cfg=None,
                   pretrained_cfg_overlay=None, **kwargs):
     model = MixFormer(
-        depth=[2, 2, 2, 4, 2],
-        embed_dim=[96, 96, 192, 320, 384], 
+        depth=[1, 2, 2, 7, 2],
+        embed_dim=[64, 64, 128, 192, 320], 
         head_dim=32,
         mlp_ratios=[4, 4, 4, 4, 4],
         attn_type=["STEM","M","M","S","S"],
@@ -895,7 +902,7 @@ def sformer_tiny(pretrained=False, pretrained_cfg=None,
 def mixformer_tiny_2(pretrained=False, pretrained_cfg=None,
                   pretrained_cfg_overlay=None, **kwargs):
     model = MixFormer(
-        depth=[2, 2, 2, 6, 2],
+        depth=[1, 2, 2, 6, 2],
         embed_dim=[96, 96, 192, 320, 480], 
         head_dim=32,
         mlp_ratios=[4, 4, 4, 4, 4],

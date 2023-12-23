@@ -330,7 +330,7 @@ def main():
         else:
             if utils.is_primary(args):
                 _logger.info("Using native Torch DistributedDataParallel.")
-            model = NativeDDP(model, device_ids=[device], broadcast_buffers=not args.no_ddp_bb, find_unused_parameters=True)
+            model = NativeDDP(model, device_ids=[device], broadcast_buffers=not args.no_ddp_bb, find_unused_parameters=False)
         # NOTE: EMA model does not need to be wrapped by DDP
 
     if args.torchcompile:
