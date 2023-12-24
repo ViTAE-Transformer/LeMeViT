@@ -899,11 +899,11 @@ def sformer_tiny(pretrained=False, pretrained_cfg=None,
     return model
 
 @register_model
-def mixformer_tiny_2(pretrained=False, pretrained_cfg=None,
+def mixformer_small(pretrained=False, pretrained_cfg=None,
                   pretrained_cfg_overlay=None, **kwargs):
     model = MixFormer(
         depth=[1, 2, 2, 6, 2],
-        embed_dim=[96, 96, 192, 320, 480], 
+        embed_dim=[96, 96, 192, 320, 384], 
         head_dim=32,
         mlp_ratios=[4, 4, 4, 4, 4],
         attn_type=["STEM","M","M","S","S"],
@@ -954,34 +954,7 @@ def mixformer_tiny_v2(pretrained=False, pretrained_cfg=None,
     return model
 
 
-@register_model
-def mixformer_small(pretrained=False, pretrained_cfg=None,
-                  pretrained_cfg_overlay=None, **kwargs):
-    model = MixFormer(
-        depth=[4, 4, 4, 16, 4],
-        embed_dim=[64, 64, 128, 256, 512], 
-        head_dim=32,
-        mlp_ratios=[3, 3, 3, 3, 3],
-        qkv_bias=True,
-        qk_scale=None,
-        attn_drop=0.,
-        qk_dims=None,
-        cpe_ks=3,
-        pre_norm=True,
-        mlp_dwconv=False,
-        representation_size=None,
-        layer_scale_init_value=1,
-        use_checkpoint_stages=[],
-        **kwargs)
-    model.default_cfg = _cfg()
 
-    # if pretrained:
-    #     model_key = 'biformer_tiny_in1k'
-    #     url = model_urls[model_key]
-    #     checkpoint = torch.hub.load_state_dict_from_url(url=url, map_location="cpu", check_hash=True, file_name=f"{model_key}.pth")
-    #     model.load_state_dict(checkpoint["model"])
-
-    return model
 
 # @register_model
 # def biformer_small(pretrained=False, pretrained_cfg=None,
