@@ -213,7 +213,7 @@ class StandardAttention(nn.Module):
         # with torch.no_grad():
         #     attn = (q @ k.transpose(-2, -1)) * self.scale
         #     attn_map = attn.softmax(dim=-1)
-            # print("Standard:", attn_map)
+        #     # print("Standard:", attn_map)
         return x
 
 
@@ -316,9 +316,11 @@ class MixAttention(nn.Module):
             c = rearrange(c, "B h M d -> B M (h d)").contiguous()
             c = self.proj_c(c)
         # with torch.no_grad():   
+        #     # q1 = rearrange(q1, "B h M d -> B M (h d)").contiguous()
+        #     # k2 = rearrange(k2, "B h M d -> B M (h d)").contiguous()
         #     attn = (q1 @ k2.transpose(-2, -1)) * scale_x
         #     attn_map = attn.softmax(dim=-1)
-            # print("Mix:", attn_map)
+        #     # print("Mix:", attn_map)
         return x, c
     
 class MixAttention_v2(nn.Module):
@@ -953,7 +955,36 @@ def mixformer_tiny_v2(pretrained=False, pretrained_cfg=None,
     model.default_cfg = _cfg()
     return model
 
+@register_model
+def mixformer_base(pretrained=False, pretrained_cfg=None,
+                  pretrained_cfg_overlay=None, **kwargs):
+    model = MixFormer(
+        depth=[2, 4, 4, 18, 4],
+        embed_dim=[96, 96, 192, 384, 512], 
+        head_dim=32,
+        mlp_ratios=[4, 4, 4, 4, 4],
+        attn_type=["STEM","M","M","S","S"],
+        queries_len=16,
+        qkv_bias=True,
+        qk_scale=None,
+        attn_drop=0.,
+        qk_dims=None,
+        cpe_ks=3,
+        pre_norm=True,
+        mlp_dwconv=False,
+        representation_size=None,
+        layer_scale_init_value=-1,
+        use_checkpoint_stages=[],
+        **kwargs)
+    model.default_cfg = _cfg()
 
+    # if pretrained:
+    #     model_key = 'biformer_tiny_in1k'
+    #     url = model_urls[model_key]
+    #     checkpoint = torch.hub.load_state_dict_from_url(url=url, map_location="cpu", check_hash=True, file_name=f"{model_key}.pth")
+    #     model.load_state_dict(checkpoint["model"])
+
+    return model
 
 
 # @register_model
