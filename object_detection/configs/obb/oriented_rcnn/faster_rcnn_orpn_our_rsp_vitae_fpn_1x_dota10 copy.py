@@ -4,7 +4,11 @@ _base_ = [
     '../../_base_/default_runtime.py'
 ]
 
-optimizer = dict(_delete_=True, type='AdamW', lr=0.001, betas=(0.9, 0.999), weight_decay=0.05)
+optimizer = dict(_delete_=True, type='AdamW', lr=0.0001, betas=(0.9, 0.999), weight_decay=0.05,
+                 paramwise_cfg=dict(custom_keys={'absolute_pos_embed': dict(decay_mult=0.),
+                                                 'relative_position_bias_table': dict(decay_mult=0.),
+                                                 'norm': dict(decay_mult=0.)}))
+lr_config = dict(step=[8, 11])
 
 #optimizer = dict(type='SGD', lr=0.0025, momentum=0.9, weight_decay=0.0001)
 # RetinaNet nms is slow in early stage, disable every epoch evaluation
@@ -13,30 +17,30 @@ evaluation = None
 
 model = dict(
     type='OrientedRCNN',
-    pretrained='outputs/scene_recognition/mixformer_small_224/exp3/model_best.pth.tar',
+    # pretrained='../VitAE_window/output/ViTAE_Window_NoShift_12_basic_stages4_14_224/epoch100/ViTAE_Window_NoShift_12_basic_stages4_14/default/ckpt.pth',
     backbone=dict(
-        type='MixFormer',
-        depth=[1, 2, 2, 6, 2],
-        embed_dim=[96, 96, 192, 320, 384], 
-        head_dim=32,
-        mlp_ratios=[4, 4, 4, 4, 4],
-        attn_type=["STEM","M","M","S","S"],
-        queries_len=16,
-        qkv_bias=True,
-        qk_scale=None,
-        attn_drop=0.,
-        qk_dims=None,
-        cpe_ks=3,
-        pre_norm=True,
-        mlp_dwconv=False,
-        representation_size=None,
-        layer_scale_init_value=-1,
-        use_checkpoint_stages=[],
-        frozen_stages= [-1],
+        type='ViTAE_Window_NoShift_basic',
+        RC_tokens_type=['swin', 'swin', 'transformer', 'transformer'], 
+        NC_tokens_type=['swin', 'swin', 'transformer', 'transformer'], 
+        stages=4, 
+        embed_dims=[64, 64, 128, 256], 
+        token_dims=[64, 128, 256, 512], 
+        downsample_ratios=[4, 2, 2, 2],
+        NC_depth=[2, 2, 8, 2], 
+        NC_heads=[1, 2, 4, 8], 
+        RC_heads=[1, 1, 2, 4], 
+        mlp_ratio=4., 
+        NC_group=[1, 32, 64, 128], 
+        RC_group=[1, 16, 32, 64],
+        img_size=1024, 
+        window_size=7,
+        drop_path_rate=0.3,
+        frozen_stages=1,
+        norm_eval=True
         ),
     neck=dict(
         type='FPN',
-        in_channels=[96, 192, 320, 384],
+        in_channels=[64, 128, 256, 512],
         out_channels=256,
         num_outs=5),
     rpn_head=dict(
@@ -139,6 +143,6 @@ test_cfg = dict(
 
 
 data = dict(
-    samples_per_gpu=8,
+    samples_per_gpu=2,
     workers_per_gpu=4
 )

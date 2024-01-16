@@ -4,7 +4,11 @@ _base_ = [
     '../../_base_/default_runtime.py'
 ]
 
-optimizer = dict(_delete_=True, type='AdamW', lr=0.001, betas=(0.9, 0.999), weight_decay=0.05)
+optimizer = dict(_delete_=True, type='AdamW', lr=0.0001, betas=(0.9, 0.999), weight_decay=0.05,
+                 paramwise_cfg=dict(custom_keys={'absolute_pos_embed': dict(decay_mult=0.),
+                                                 'relative_position_bias_table': dict(decay_mult=0.),
+                                                 'norm': dict(decay_mult=0.)}))
+lr_config = dict(step=[8, 11])
 
 #optimizer = dict(type='SGD', lr=0.0025, momentum=0.9, weight_decay=0.0001)
 # RetinaNet nms is slow in early stage, disable every epoch evaluation
@@ -13,30 +17,29 @@ evaluation = None
 
 model = dict(
     type='OrientedRCNN',
-    pretrained='outputs/scene_recognition/mixformer_small_224/exp3/model_best.pth.tar',
+    # pretrained='/public/data3/users/wangdi153/RS_CV/Swin-Transformer-main/output/swin_tiny_patch4_window7_224/epoch300/swin_tiny_patch4_window7_224/default/ckpt.pth',
     backbone=dict(
-        type='MixFormer',
-        depth=[1, 2, 2, 6, 2],
-        embed_dim=[96, 96, 192, 320, 384], 
-        head_dim=32,
-        mlp_ratios=[4, 4, 4, 4, 4],
-        attn_type=["STEM","M","M","S","S"],
-        queries_len=16,
+        type='swin',
+        embed_dim=96,
+        depths=[2, 2, 6, 2],
+        num_heads=[3, 6, 12, 24],
+        window_size=7,
+        mlp_ratio=4.,
         qkv_bias=True,
         qk_scale=None,
-        attn_drop=0.,
-        qk_dims=None,
-        cpe_ks=3,
-        pre_norm=True,
-        mlp_dwconv=False,
-        representation_size=None,
-        layer_scale_init_value=-1,
-        use_checkpoint_stages=[],
-        frozen_stages= [-1],
+        drop_rate=0.3,
+        attn_drop_rate=0.,
+        drop_path_rate=0.3,
+        ape=False,
+        patch_norm=True,
+        out_indices=(0, 1, 2, 3),
+        use_checkpoint=False,
+        frozen_stages=2,
+        norm_eval=False
         ),
     neck=dict(
         type='FPN',
-        in_channels=[96, 192, 320, 384],
+        in_channels=[96, 192, 384, 768],
         out_channels=256,
         num_outs=5),
     rpn_head=dict(
@@ -139,6 +142,6 @@ test_cfg = dict(
 
 
 data = dict(
-    samples_per_gpu=8,
+    samples_per_gpu=2,
     workers_per_gpu=4
 )

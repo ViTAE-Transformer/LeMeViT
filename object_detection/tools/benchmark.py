@@ -11,6 +11,7 @@ from mmdet.core import wrap_fp16_model
 from mmdet.datasets import build_dataloader, build_dataset
 from mmdet.models import build_detector
 
+import calflops
 
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet benchmark a model')
@@ -63,6 +64,14 @@ def main():
     # the first several iterations may be very slow so skip them
     num_warmup = 5
     pure_inf_time = 0
+
+    for i, data in enumerate(data_loader):
+        print(data)
+        data["return_loss"]=False
+        data["rescale"]=True
+        with torch.no_grad():
+            print(calflops.calculate_flops(model, kwargs=data, output_as_string=True, output_precision=4))
+        break
 
     # benchmark with 2000 image and take the average
     for i, data in enumerate(data_loader):
