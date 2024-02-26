@@ -8,10 +8,11 @@
 #     main.py \
 #     --config configs/mixformer.yaml \
 #     --output outputs/classification \
+#     --resume outputs/classification/mixformer_base_224/exp1/checkpoint-166.pth.tar \
 #     --experiment exp1 \
-#     --model mixformer_tiny \
+#     --model mixformer_base \
 #     --img-size 224 \
-#     --batch-size 400
+#     --batch-size 64
 
 OMP_NUM_THREADS=1 \
 CUDA_VISIBLE_DEVICES="4,5,6,7" \
@@ -21,9 +22,9 @@ CUDA_VISIBLE_DEVICES="4,5,6,7" \
     --nnodes 1 \
     --nproc_per_node 4 \
     main.py \
-    --config configs/mixformer_scene_recognition.yaml \
-    --output outputs/scene_recognition \
+    --config configs/mixformer.yaml \
+    --output outputs/classification \
     --experiment exp1 \
-    --model mixformer_small \
+    --model mixformer_small_v2 \
     --img-size 224 \
-    --batch-size 200
+    --batch-size 256

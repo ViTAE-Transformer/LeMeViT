@@ -6,7 +6,7 @@ CUDA_VISIBLE_DEVICES="4,5,6,7" \
     --nnodes 1 \
     --nproc_per_node 4 \
     object_detection/tools/train.py \
-    object_detection/configs/obb/oriented_rcnn/faster_rcnn_orpn_mixformer_rsp_fpn_1x_dota10.py \
-    --work-dir outputs/object_detection/exp7 \
+    object_detection/configs/obb/oriented_rcnn/faster_rcnn_orpn_mixformer_tiny_rsp_fpn_1x_dota10.py \
+    --work-dir outputs/object_detection/tiny-exp1 \
     --launcher 'pytorch' \
     --options 'find_unused_parameters'=True

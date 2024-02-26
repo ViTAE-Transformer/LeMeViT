@@ -44,7 +44,7 @@ cooldown_epochs: 0
 
 
 # amp
-amp: false
+amp: true
 amp_dtype: float16
 amp_impl: native
 

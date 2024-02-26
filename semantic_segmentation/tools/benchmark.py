@@ -13,6 +13,7 @@ from mmcv.runner import load_checkpoint, wrap_fp16_model
 from mmseg.datasets import build_dataloader, build_dataset
 from mmseg.models import build_segmentor
 
+import calflops
 
 def parse_args():
     parser = argparse.ArgumentParser(description='MMSeg benchmark a model')
@@ -77,6 +78,13 @@ def main():
 
         model.eval()
 
+        for i, data in enumerate(data_loader):
+            print(data)
+            data["return_loss"]=False
+            data["rescale"]=True
+            with torch.no_grad():
+                print(calflops.calculate_flops(model, kwargs=data, output_as_string=True, output_precision=4))
+            break
         # the first several iterations may be very slow so skip them
         num_warmup = 5
         pure_inf_time = 0

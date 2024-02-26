@@ -1,29 +1,32 @@
 # model settings
 norm_cfg = dict(type='SyncBN', requires_grad=True)
+backbone_norm_cfg = dict(type='LN', requires_grad=True)
 model = dict(
     type='EncoderDecoder',
     pretrained=None,
     backbone=dict(
-        type='MixFormer',
-        depth=[1, 2, 2, 6, 2],
-        embed_dim=[96, 96, 192, 320, 384], 
-        head_dim=32,
-        mlp_ratios=[4, 4, 4, 4, 4],
-        attn_type=["STEM","M","M","S","S"],
-        queries_len=16,
+        type='SwinTransformer',
+        pretrain_img_size=224,
+        embed_dims=96,
+        patch_size=4,
+        window_size=7,
+        mlp_ratio=4,
+        depths=[2, 2, 6, 2],
+        num_heads=[3, 6, 12, 24],
+        strides=(4, 2, 2, 2),
+        out_indices=(0, 1, 2, 3),
         qkv_bias=True,
         qk_scale=None,
-        attn_drop=0.,
-        qk_dims=None,
-        cpe_ks=3,
-        pre_norm=True,
-        mlp_dwconv=False,
-        representation_size=None,
-        layer_scale_init_value=-1,
-        ),
+        patch_norm=True,
+        drop_rate=0.,
+        attn_drop_rate=0.,
+        drop_path_rate=0.3,
+        use_abs_pos_embed=False,
+        act_cfg=dict(type='GELU'),
+        norm_cfg=backbone_norm_cfg),
     decode_head=dict(
         type='UPerHead',
-        in_channels=[96, 192, 320, 384],
+        in_channels=[96, 192, 384, 768],
         in_index=[0, 1, 2, 3],
         pool_scales=(1, 2, 3, 6),
         channels=512,
@@ -32,11 +35,10 @@ model = dict(
         norm_cfg=norm_cfg,
         align_corners=False,
         loss_decode=dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, avg_non_ignore=True)
-            ),
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)),
     auxiliary_head=dict(
         type='FCNHead',
-        in_channels=320,
+        in_channels=384,
         in_index=2,
         channels=256,
         num_convs=1,
@@ -46,9 +48,7 @@ model = dict(
         norm_cfg=norm_cfg,
         align_corners=False,
         loss_decode=dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=0.4, avg_non_ignore=True)),
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=0.4)),
     # model training and testing settings
     train_cfg=dict(),
-    #test_cfg=dict(mode='whole')
-    test_cfg=dict(mode='slide', stride=(384,384), crop_size=(512,512))
-    )
+    test_cfg=dict(mode='whole'))

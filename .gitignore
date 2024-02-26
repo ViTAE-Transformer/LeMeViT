@@ -8,3 +8,6 @@ backup
 *.backup*
 work_dirs
 benchmark.txt
+
+.pth
+.png

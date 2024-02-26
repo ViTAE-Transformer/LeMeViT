@@ -14,7 +14,7 @@ Image.MAX_IMAGE_PIXELS = None
 from torchvision import transforms
 
 class MillionAIDDataset(data.Dataset):
-    def __init__(self, root, train=True, img_mode='RGB', transform=None, target_transform=None):
+    def __init__(self, root, train=True, img_mode='RGB', transform=None, target_transform=None, **kwargs):
 
         with open(os.path.join(root, 'train_labels.txt'), mode='r') as f:
             train_infos = f.readlines()
