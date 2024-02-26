@@ -1,7 +1,7 @@
 local*
 outputs*
 __pycache__
-.pyc
+*.pyc
 .vscode
 /datasets/
 backup
@@ -9,5 +9,7 @@ backup
 work_dirs
 benchmark.txt
 
-.pth
-.png
+*.sh
+
+*.pth
+*.png
