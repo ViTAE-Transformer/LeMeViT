@@ -101,8 +101,8 @@ def parse_args():
             'specified, --options is deprecated in favor of --cfg-options. '
             '--options will not be supported in version v0.22.0.')
     if args.options:
-        warnings.warn('--options is deprecated in favor of --cfg-options. '
-                      '--options will not be supported in version v0.22.0.')
+        # warnings.warn('--options is deprecated in favor of --cfg-options. '
+        #               '--options will not be supported in version v0.22.0.')
         args.cfg_options = args.options
 
     return args

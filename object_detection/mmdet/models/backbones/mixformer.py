@@ -18,7 +18,7 @@ from einops import rearrange
 
 from fairscale.nn.checkpoint import checkpoint_wrapper
 from timm.models import register_model
-from timm.models.layers import DropPath, to_2tuple, trunc_normal_
+from timm.models.layers import DropPath, to_2tuple, trunc_normal_, LayerNorm2d
 from timm.models.vision_transformer import _cfg
 
 
@@ -725,6 +725,11 @@ class MixFormer(nn.Module):
                 nn.LayerNorm(embed_dim[i+1])
             )
             self.prototype_downsample.append(prototype_downsample)
+        
+        self.extra_norms = nn.ModuleList()
+        
+        for i in range(self.num_stages-1):
+            self.extra_norms.append(LayerNorm2d(embed_dim[i+1]))
 
         # self.prototype_stem = nn.ModuleList()
         # for i in range(4):
@@ -781,7 +786,7 @@ class MixFormer(nn.Module):
             for j, block in enumerate(self.stages[i]):
                 x, c = block(x, c)
             if i > 0:
-                out = x
+                out = self.extra_norms[i-1](x).contiguous()
                 # out = x + c.transpose(-2,-1).contiguous().mean(-1,keepdim=True).unsqueeze(-1)
                 outs.append(out)
         # x = self.norm(x)
@@ -811,10 +816,10 @@ class MixFormer(nn.Module):
 
     def train(self, mode=True):
         self._freeze_stages()
-        freeze_bn = False
+        freeze_bn = True
         super(MixFormer, self).train(mode)
         if freeze_bn:
-            for m in self.model.modules():
+            for m in self.modules():
                 if isinstance(m, nn.BatchNorm2d):
                     m.eval()
                 if isinstance(m, nn.LayerNorm):
