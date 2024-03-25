@@ -8,7 +8,7 @@ pin_mem: true
 # model
 model: mixformer_tiny
 drop: 0.0
-drop_path: 0.1
+drop_path: 0.15
 
 # opt
 epochs: 300
@@ -22,9 +22,9 @@ weight_decay: 0.05
 
 # sched
 sched: cosine
-lr_base: 1.0e-3
+lr_base: 5.0e-4
 min_lr: 1.0e-5
-warmup_lr: 5.0e-05
+warmup_lr: 1.0e-06
 warmup_epochs: 5
 
 lr_base_scale: linear
@@ -39,9 +39,10 @@ lr_k_decay: 1.0
 lr_noise: null
 lr_noise_pct: 0.67
 lr_noise_std: 1.0
-cooldown_epochs: 0
-# patience_epochs: 10
 
+decay_epochs: 30
+cooldown_epochs: 10
+patience_epochs: 10
 
 # amp
 amp: true
@@ -49,8 +50,8 @@ amp_dtype: float16
 amp_impl: native
 
 # ema
-model_ema: false
-model_ema_decay: 0.99996
+model_ema: true
+model_ema_decay: 0.996
 model_ema_force_cpu: false
 
 # mixup
