@@ -673,6 +673,8 @@ class MixFormer(nn.Module):
         
         qk_dims = qk_dims or embed_dim
         
+        self.num_stages = len(attn_type)
+        
         ############ downsample layers (patch embeddings) ######################
         self.downsample_layers = nn.ModuleList()
         # NOTE: uniformer uses two 3*3 conv, while in many other transformers this is one 7*7 conv 
@@ -688,7 +690,7 @@ class MixFormer(nn.Module):
             stem = checkpoint_wrapper(stem)
         self.downsample_layers.append(stem)
 
-        for i in range(4):
+        for i in range(self.num_stages-1):
             if attn_type[i] == "STEM":
                 downsample_layer = nn.Identity()
             else:
@@ -714,7 +716,7 @@ class MixFormer(nn.Module):
             nn.LayerNorm(embed_dim[0])
         )
         self.prototype_downsample.append(prototype_downsample)
-        for i in range(4):
+        for i in range(self.num_stages-1):
             prototype_downsample = nn.Sequential(
                 nn.Linear(embed_dim[i], embed_dim[i] * 4),
                 nn.LayerNorm(embed_dim[i] * 4),
@@ -733,7 +735,7 @@ class MixFormer(nn.Module):
         nheads= [dim // head_dim for dim in qk_dims]
         dp_rates=[x.item() for x in torch.linspace(0, drop_path_rate, sum(depth))] 
         cur = 0
-        for i in range(5):
+        for i in range(self.num_stages):
             stage = nn.ModuleList(
                 [MixBlock(dim=embed_dim[i], 
                            attn_drop=attn_drop, proj_drop=drop_rate,
@@ -773,7 +775,7 @@ class MixFormer(nn.Module):
 
     def forward_features(self, x, c):
         outs = []
-        for i in range(5): 
+        for i in range(self.num_stages): 
             x = self.downsample_layers[i](x)
             c = self.prototype_downsample[i](c)
             for j, block in enumerate(self.stages[i]):
@@ -850,7 +852,7 @@ class MixFormer(nn.Module):
                 del state_dict[k]
 
             # load state_dict
-            self.load_state_dict(state_dict, False)
+            print(self.load_state_dict(state_dict, False))
             
 
 

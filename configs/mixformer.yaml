@@ -26,7 +26,7 @@ lr_base: 1.0e-3
 min_lr: 1.0e-5
 warmup_lr: 5.0e-05
 warmup_epochs: 5
-weight_decay: 2.0e-05
+
 lr_base_scale: linear
 lr_base_size: 512
 auto_scale_warmup_min_lr: True

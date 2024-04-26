@@ -22,8 +22,8 @@ weight_decay: 0.05
 
 # sched
 sched: cosine
-lr_base: 5.0e-4
-min_lr: 5.0e-6
+lr_base: 8.0e-4
+min_lr: 8.0e-6
 warmup_lr: 1.0e-06
 warmup_epochs: 0
 weight_decay: 2.0e-05
