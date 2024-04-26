@@ -20,7 +20,7 @@ from .timm_backbone import TIMMBackbone
 from .twins import PCPVT, SVT
 from .unet import UNet
 from .vit import VisionTransformer
-from .mixformer import MixFormer
+from .lemevit import MixFormer
 from .ViTAE_Window_NoShift.base_model import ViTAE_Window_NoShift_basic
 from .swin_transformer import swin
 from .our_resnet import Our_ResNet

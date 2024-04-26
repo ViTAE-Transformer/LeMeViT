@@ -7,7 +7,7 @@ from .res2net import Res2Net
 from .resnet import ResNet, ResNetV1d
 from .resnext import ResNeXt
 from .ssd_vgg import SSDVGG
-from .mixformer import MixFormer
+from .lemevit import MixFormer
 from .ViTAE_Window_NoShift.base_model import ViTAE_Window_NoShift_basic
 from .swin_transformer import swin
 
