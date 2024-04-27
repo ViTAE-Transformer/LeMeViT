@@ -20,7 +20,7 @@ from .timm_backbone import TIMMBackbone
 from .twins import PCPVT, SVT
 from .unet import UNet
 from .vit import VisionTransformer
-from .lemevit import MixFormer
+from .lemevit import LeMeViT
 from .ViTAE_Window_NoShift.base_model import ViTAE_Window_NoShift_basic
 from .swin_transformer import swin
 from .our_resnet import Our_ResNet
@@ -30,5 +30,5 @@ __all__ = [
     'ResNeSt', 'MobileNetV2', 'UNet', 'CGNet', 'MobileNetV3',
     'VisionTransformer', 'SwinTransformer', 'MixVisionTransformer',
     'BiSeNetV1', 'BiSeNetV2', 'ICNet', 'TIMMBackbone', 'ERFNet', 'PCPVT',
-    'SVT', 'STDCNet', 'STDCContextPathNet', 'BEiT', 'MAE', 'MixFormer','ViTAE_Window_NoShift_basic', 'swin', 'Our_ResNet'
+    'SVT', 'STDCNet', 'STDCContextPathNet', 'BEiT', 'MAE', 'LeMeViT','ViTAE_Window_NoShift_basic', 'swin', 'Our_ResNet'
 ]

@@ -7,11 +7,11 @@ from .res2net import Res2Net
 from .resnet import ResNet, ResNetV1d
 from .resnext import ResNeXt
 from .ssd_vgg import SSDVGG
-from .lemevit import MixFormer
+from .lemevit import LeMeViT
 from .ViTAE_Window_NoShift.base_model import ViTAE_Window_NoShift_basic
 from .swin_transformer import swin
 
 __all__ = [
     'RegNet', 'ResNet', 'ResNetV1d', 'ResNeXt', 'SSDVGG', 'HRNet', 'Res2Net',
-    'HourglassNet', 'DetectoRS_ResNet', 'DetectoRS_ResNeXt', 'MixFormer', 'ViTAE_Window_NoShift_basic', 'swin'
+    'HourglassNet', 'DetectoRS_ResNet', 'DetectoRS_ResNeXt', 'LeMeViT', 'ViTAE_Window_NoShift_basic', 'swin'
 ]

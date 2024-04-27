@@ -41,8 +41,8 @@ lr_noise_pct: 0.67
 lr_noise_std: 1.0
 
 decay_epochs: 30
-cooldown_epochs: 10
-patience_epochs: 10
+# cooldown_epochs: 10
+# patience_epochs: 10
 
 # amp
 amp: true

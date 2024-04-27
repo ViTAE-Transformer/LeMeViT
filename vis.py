@@ -181,7 +181,7 @@ device = torch.device("cuda")
 # create model
 in_chans = 3
 
-model = mixformer_tiny(num_classes=51)
+model = lemevit_tiny(num_classes=51)
 
 ckpt = torch.load(pretrained, map_location='cpu')
 if 'state_dict' in ckpt:

@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/models/upernet_mixformer.py', '../_base_/datasets/potsdam.py',
+    '../_base_/models/upernet_lemevit_small.py', '../_base_/datasets/potsdam.py',
     '../_base_/default_runtime.py', '../_base_/schedules/schedule_80k.py'
 ]
 model = dict(

@@ -55,6 +55,19 @@ except ImportError:
 has_flash_attn = False
 has_xformers = False
 
+
+def scaled_dot_product_attention(q, k, v, scale=None):
+    """Custom Scaled-Dot Product Attention
+        dim (B h N d)
+    """
+    _,_,_,dim = q.shape
+    scale = scale or dim**(-0.5)
+    attn = q @ k.transpose(-1,-2) * scale
+    attn = attn.softmax(dim=-1)
+    x = attn @ v
+    return x
+
+
 class DWConv(nn.Module):
     def __init__(self, dim=768):
         super(DWConv, self).__init__()
@@ -205,11 +218,11 @@ class StandardAttention(nn.Module):
         # with torch.no_grad():
         #     attn = (q @ k.transpose(-2, -1)) * self.scale
         #     attn_map = attn.softmax(dim=-1)
-            # print("Standard:", attn_map)
+        #     # print("Standard:", attn_map)
         return x
 
 
-class MixAttention(nn.Module):
+class DualCrossAttention(nn.Module):
     
     def __init__(
         self,
@@ -308,13 +321,14 @@ class MixAttention(nn.Module):
             c = rearrange(c, "B h M d -> B M (h d)").contiguous()
             c = self.proj_c(c)
         # with torch.no_grad():   
+        #     # q1 = rearrange(q1, "B h M d -> B M (h d)").contiguous()
+        #     # k2 = rearrange(k2, "B h M d -> B M (h d)").contiguous()
         #     attn = (q1 @ k2.transpose(-2, -1)) * scale_x
         #     attn_map = attn.softmax(dim=-1)
-            # print("Mix:", attn_map)
+        #     # print("Mix:", attn_map)
         return x, c
     
-class MixAttention_v2(nn.Module):
-    
+class DualCrossAttention_v2(nn.Module):
     def __init__(
         self,
         dim,
@@ -412,7 +426,7 @@ class MixAttention_v2(nn.Module):
             c = self.proj_c(c)
         return x, c
 
-class StemAttention(nn.Module):
+class CrossAttention(nn.Module):
     def __init__(
         self,
         dim,
@@ -487,7 +501,7 @@ class StemAttention(nn.Module):
         return c
     
 
-class MixBlock(nn.Module):
+class LeMeBlock(nn.Module):
     def __init__(self, dim, 
                  attn_drop, proj_drop, drop_path=0., attn_type=None,
                  layer_scale_init_value=-1, num_heads=8, qk_dim=None, mlp_ratio=4, mlp_dwconv=False,
@@ -503,14 +517,14 @@ class MixBlock(nn.Module):
         self.norm1 = nn.LayerNorm(dim, eps=1e-6) # important to avoid attention collapsing
         
         self.attn_type = attn_type
-        if attn_type == "M":
-            self.attn = MixAttention(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
-        elif attn_type == "M2":
-            self.attn = MixAttention_v2(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
+        if attn_type == "D":
+            self.attn = DualCrossAttention(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
+        elif attn_type == "D2":
+            self.attn = DualCrossAttention_v2(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
         elif attn_type == "S" or attn_type == None:
             self.attn = StandardAttention(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
-        elif attn_type == "STEM":
-            self.attn = StemAttention(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
+        elif attn_type == "C":
+            self.attn = CrossAttention(dim=dim, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
             
         self.norm2 = nn.LayerNorm(dim, eps=1e-6)
         self.mlp = nn.Sequential(nn.Linear(dim, int(mlp_ratio*dim)),
@@ -633,15 +647,15 @@ class MixBlock(nn.Module):
         return x, c
     
     def forward(self, x, c):
-        if self.attn_type == "M" or self.attn_type == "M2":
+        if self.attn_type == "D" or self.attn_type == "D2":
             return self.forward_with_xc(x,c)
         elif self.attn_type == "S":
             return self.forward_with_x(x,c)
-        elif self.attn_type == "STEM":
+        elif self.attn_type == "C":
             return self.forward_with_c(x,c)
 
 @BACKBONES.register_module()
-class MixFormer(BaseModule):
+class LeMeViT(BaseModule):
     def __init__(self, 
                  depth=[2, 3, 4, 8, 3], 
                  in_chans=3, 
@@ -655,7 +669,7 @@ class MixFormer(BaseModule):
                  attn_drop=0., 
                  drop_path_rate=0.,
                  # <<<------
-                 attn_type=["STEM","M","M","S","S"],
+                 attn_type=["C","D","D","S","S"],
                  queries_len=128,
                  qk_dims=None,
                  cpe_ks=3,
@@ -672,6 +686,8 @@ class MixFormer(BaseModule):
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         qk_dims = qk_dims or embed_dim
+        
+        self.num_stages = len(attn_type)
         
         assert not (init_cfg and pretrained), \
             'init_cfg and pretrained cannot be specified at the same time'
@@ -698,8 +714,8 @@ class MixFormer(BaseModule):
             stem = checkpoint_wrapper(stem)
         self.downsample_layers.append(stem)
 
-        for i in range(4):
-            if attn_type[i] == "STEM":
+        for i in range(self.num_stages-1):
+            if attn_type[i] == "C":
                 downsample_layer = nn.Identity()
             else:
                 downsample_layer = nn.Sequential(
@@ -711,41 +727,39 @@ class MixFormer(BaseModule):
             self.downsample_layers.append(downsample_layer)
         ##########################################################################
 
+
         #TODO: maybe remove last LN
         self.queries_len = queries_len
-        self.prototypes = nn.Parameter(torch.randn(self.queries_len ,embed_dim[0]), requires_grad=True) 
+        self.meta_tokens = nn.Parameter(torch.randn(self.queries_len ,embed_dim[0]), requires_grad=True) 
         
-        self.prototype_downsample = nn.ModuleList()
-        prototype_downsample = nn.Sequential(
+        self.meta_token_downsample = nn.ModuleList()
+        meta_token_downsample = nn.Sequential(
             nn.Linear(embed_dim[0], embed_dim[0] * 4),
             nn.LayerNorm(embed_dim[0] * 4),
             nn.GELU(),
             nn.Linear(embed_dim[0] * 4, embed_dim[0]),
             nn.LayerNorm(embed_dim[0])
         )
-        self.prototype_downsample.append(prototype_downsample)
-        for i in range(4):
-            prototype_downsample = nn.Sequential(
+        self.meta_token_downsample.append(meta_token_downsample)
+        for i in range(self.num_stages-1):
+            meta_token_downsample = nn.Sequential(
                 nn.Linear(embed_dim[i], embed_dim[i] * 4),
                 nn.LayerNorm(embed_dim[i] * 4),
                 nn.GELU(),
                 nn.Linear(embed_dim[i] * 4, embed_dim[i+1]),
                 nn.LayerNorm(embed_dim[i+1])
             )
-            self.prototype_downsample.append(prototype_downsample)
+            self.meta_token_downsample.append(meta_token_downsample)
 
-        # self.prototype_stem = nn.ModuleList()
-        # for i in range(4):
-        #     prototype_stem = StemAttention(embed_dim[0], num_heads=2, bias=True)
-        #     self.prototype_stem.append(prototype_stem)
+
         
         self.stages = nn.ModuleList() # 4 feature resolution stages, each consisting of multiple residual blocks
         nheads= [dim // head_dim for dim in qk_dims]
         dp_rates=[x.item() for x in torch.linspace(0, drop_path_rate, sum(depth))] 
         cur = 0
-        for i in range(5):
+        for i in range(self.num_stages):
             stage = nn.ModuleList(
-                [MixBlock(dim=embed_dim[i], 
+                [LeMeBlock(dim=embed_dim[i], 
                            attn_drop=attn_drop, proj_drop=drop_rate,
                            drop_path=dp_rates[cur + j],
                            attn_type=attn_type[i],
@@ -782,9 +796,9 @@ class MixFormer(BaseModule):
 
     def forward_features(self, x, c):
         outs = []
-        for i in range(5): 
+        for i in range(self.num_stages): 
             x = self.downsample_layers[i](x)
-            c = self.prototype_downsample[i](c)
+            c = self.meta_token_downsample[i](c)
             for j, block in enumerate(self.stages[i]):
                 x, c = block(x, c)
             if i > 0:
@@ -804,7 +818,7 @@ class MixFormer(BaseModule):
 
     def forward(self, x):
         B, _, H, W = x.shape 
-        c = self.prototypes.repeat(B,1,1)
+        c = self.meta_tokens.repeat(B,1,1)
         x = self.forward_features(x, c)
         # x = self.head(x)
         return x
@@ -856,174 +870,11 @@ class MixFormer(BaseModule):
         
     def train(self, mode=True):
         freeze_bn = False
-        super(MixFormer, self).train(mode)
+        super(LeMeViT, self).train(mode)
         if freeze_bn:
             for m in self.model.modules():
                 if isinstance(m, nn.BatchNorm2d):
                     m.eval()
                 if isinstance(m, nn.LayerNorm):
                     m.eval()
-
-
-#################### model variants #######################
-
-
-# model_urls = {
-#     "biformer_tiny_in1k": "https://api.onedrive.com/v1.0/shares/s!AkBbczdRlZvChHEOoGkgwgQzEDlM/root/content",
-#     "biformer_small_in1k": "https://api.onedrive.com/v1.0/shares/s!AkBbczdRlZvChHDyM-x9KWRBZ832/root/content",
-#     "biformer_base_in1k": "https://api.onedrive.com/v1.0/shares/s!AkBbczdRlZvChHI_XPhoadjaNxtO/root/content",
-# }
-
-
-# https://github.com/huggingface/pytorch-image-models/blob/4b8cfa6c0a355a9b3cb2a77298b240213fb3b921/timm/models/_factory.py#L93
-
-@register_model
-def mixformer_tiny(pretrained=False, pretrained_cfg=None,
-                  pretrained_cfg_overlay=None, **kwargs):
-    model = MixFormer(
-        depth=[2, 2, 2, 4, 2],
-        embed_dim=[96, 96, 192, 320, 384], 
-        head_dim=32,
-        mlp_ratios=[4, 4, 4, 4, 4],
-        attn_type=["STEM","M","M","S","S"],
-        queries_len=16,
-        qkv_bias=True,
-        qk_scale=None,
-        attn_drop=0.,
-        qk_dims=None,
-        cpe_ks=3,
-        pre_norm=True,
-        mlp_dwconv=False,
-        representation_size=None,
-        layer_scale_init_value=-1,
-        use_checkpoint_stages=[],
-        **kwargs)
-    model.default_cfg = _cfg()
-
-    # if pretrained:
-    #     model_key = 'biformer_tiny_in1k'
-    #     url = model_urls[model_key]
-    #     checkpoint = torch.hub.load_state_dict_from_url(url=url, map_location="cpu", check_hash=True, file_name=f"{model_key}.pth")
-    #     model.load_state_dict(checkpoint["model"])
-
-    return model
-
-@register_model
-def mixformer_tiny_v2(pretrained=False, pretrained_cfg=None,
-                  pretrained_cfg_overlay=None, **kwargs):
-    model = MixFormer(
-        depth=[2, 2, 2, 4, 2],
-        embed_dim=[96, 96, 192, 320, 384], 
-        head_dim=32,
-        mlp_ratios=[4, 4, 4, 4, 4],
-        attn_type=["STEM","M2","M2","S","S"],
-        queries_len=16,
-        qkv_bias=True,
-        qk_scale=None,
-        attn_drop=0.,
-        qk_dims=None,
-        cpe_ks=3,
-        pre_norm=True,
-        mlp_dwconv=False,
-        representation_size=None,
-        layer_scale_init_value=-1,
-        use_checkpoint_stages=[],
-        **kwargs)
-    model.default_cfg = _cfg()
-    return model
-
-
-@register_model
-def mixformer_small(pretrained=False, pretrained_cfg=None,
-                  pretrained_cfg_overlay=None, **kwargs):
-    model = MixFormer(
-        depth=[4, 4, 4, 16, 4],
-        embed_dim=[64, 64, 128, 256, 512], 
-        head_dim=32,
-        mlp_ratios=[3, 3, 3, 3, 3],
-        qkv_bias=True,
-        qk_scale=None,
-        attn_drop=0.,
-        qk_dims=None,
-        cpe_ks=3,
-        pre_norm=True,
-        mlp_dwconv=False,
-        representation_size=None,
-        layer_scale_init_value=1,
-        use_checkpoint_stages=[],
-        **kwargs)
-    model.default_cfg = _cfg()
-
-    # if pretrained:
-    #     model_key = 'biformer_tiny_in1k'
-    #     url = model_urls[model_key]
-    #     checkpoint = torch.hub.load_state_dict_from_url(url=url, map_location="cpu", check_hash=True, file_name=f"{model_key}.pth")
-    #     model.load_state_dict(checkpoint["model"])
-
-    return model
-
-# @register_model
-# def biformer_small(pretrained=False, pretrained_cfg=None,
-#                    pretrained_cfg_overlay=None, **kwargs):
-#     model = BiFormer(
-#         depth=[4, 4, 18, 4],
-#         embed_dim=[64, 128, 256, 512], mlp_ratios=[3, 3, 3, 3],
-#         #------------------------------
-#         n_win=7,
-#         kv_downsample_mode='identity',
-#         kv_per_wins=[-1, -1, -1, -1],
-#         topks=[1, 4, 16, -2],
-#         side_dwconv=5,
-#         before_attn_dwconv=3,
-#         layer_scale_init_value=-1,
-#         qk_dims=[64, 128, 256, 512],
-#         head_dim=32,
-#         param_routing=False, diff_routing=False, soft_routing=False,
-#         pre_norm=True,
-#         pe=None,
-#         #-------------------------------
-#         **kwargs)
-#     model.default_cfg = _cfg()
-
-#     if pretrained:
-#         model_key = 'biformer_small_in1k'
-#         url = model_urls[model_key]
-#         checkpoint = torch.hub.load_state_dict_from_url(url=url, map_location="cpu", check_hash=True, file_name=f"{model_key}.pth")
-#         model.load_state_dict(checkpoint["model"])
-
-#     return model
-
-
-# @register_model
-# def biformer_base(pretrained=False, pretrained_cfg=None,
-#                   pretrained_cfg_overlay=None, **kwargs):
-#     model = BiFormer(
-#         depth=[4, 4, 18, 4],
-#         embed_dim=[96, 192, 384, 768], mlp_ratios=[3, 3, 3, 3],
-#         # use_checkpoint_stages=[0, 1, 2, 3],
-#         use_checkpoint_stages=[],
-#         #------------------------------
-#         n_win=7,
-#         kv_downsample_mode='identity',
-#         kv_per_wins=[-1, -1, -1, -1],
-#         topks=[1, 4, 16, -2],
-#         side_dwconv=5,
-#         before_attn_dwconv=3,
-#         layer_scale_init_value=-1,
-#         qk_dims=[96, 192, 384, 768],
-#         head_dim=32,
-#         param_routing=False, diff_routing=False, soft_routing=False,
-#         pre_norm=True,
-#         pe=None,
-#         #-------------------------------
-#         **kwargs)
-#     model.default_cfg = _cfg()
-
-#     if pretrained:
-#         model_key = 'biformer_base_in1k'
-#         url = model_urls[model_key]
-#         checkpoint = torch.hub.load_state_dict_from_url(url=url, map_location="cpu", check_hash=True, file_name=f"{model_key}.pth")
-#         model.load_state_dict(checkpoint["model"])
-
-#     return model
 
