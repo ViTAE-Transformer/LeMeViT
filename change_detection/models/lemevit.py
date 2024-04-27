@@ -27,12 +27,7 @@ from timm.models.vision_transformer import _cfg
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
-
-from mmseg.utils import get_root_logger
-from mmcv.runner import _load_checkpoint, BaseModule
-
-from ..builder import BACKBONES
-
+# from visualizer import get_local
 
 try:
     from flash_attn import flash_attn_qkvpacked_func, flash_attn_kvpacked_func, flash_attn_func
@@ -657,8 +652,8 @@ class LeMeBlock(nn.Module):
         else:
             raise NotImplementedError("Attention type does not exit")
 
-@BACKBONES.register_module()
-class LeMeViT(BaseModule):
+
+class LeMeViT(nn.Module):
     def __init__(self, 
                  depth=[2, 3, 4, 8, 3], 
                  in_chans=3, 
@@ -682,25 +677,20 @@ class LeMeViT(BaseModule):
                  layer_scale_init_value=-1,
                  use_checkpoint_stages=[],
                  pretrained=None,
-                 init_cfg=None,
+                 frozen_stages= [-1],
                  # ------>>>
                  ):
         super().__init__()
+        
+        self.pretrained = pretrained
+        
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
+        self.frozen_stages = frozen_stages
+        
         qk_dims = qk_dims or embed_dim
         
         self.num_stages = len(attn_type)
-        
-        assert not (init_cfg and pretrained), \
-            'init_cfg and pretrained cannot be specified at the same time'
-        if isinstance(pretrained, str):
-            init_cfg = dict(type='Pretrained', checkpoint=pretrained)
-        elif pretrained is None:
-            init_cfg = init_cfg
-        else:
-            raise TypeError('pretrained must be a str or None')
-        self.init_cfg = init_cfg
         
         ############ downsample layers (patch embeddings) ######################
         self.downsample_layers = nn.ModuleList()
@@ -729,7 +719,6 @@ class LeMeViT(BaseModule):
                 downsample_layer = checkpoint_wrapper(downsample_layer)
             self.downsample_layers.append(downsample_layer)
         ##########################################################################
-
 
         #TODO: maybe remove last LN
         self.queries_len = queries_len
@@ -795,7 +784,8 @@ class LeMeViT(BaseModule):
 
         # Classifier head
         # self.head = nn.Linear(embed_dim[-1], num_classes) if num_classes > 0 else nn.Identity()
-        # self.apply(self._init_weights)
+        self.init_weights()
+
 
     def forward_features(self, x, c):
         outs = []
@@ -826,28 +816,28 @@ class LeMeViT(BaseModule):
         # x = self.head(x)
         return x
 
-    def init_weights(self):
-        logger = get_root_logger()
-        if self.init_cfg is None:
-            logger.warn(f'No pre-trained weights for '
-                        f'{self.__class__.__name__}, '
-                        f'training start from scratch')
-            for m in self.modules():
-                if isinstance(m, nn.Linear):
-                    trunc_normal_(m.weight, std=.02)
-                    if isinstance(m, nn.Linear) and m.bias is not None:
-                        nn.init.constant_(m.bias, 0)
-                elif isinstance(m, nn.LayerNorm):
-                    nn.init.constant_(m.bias, 0)
-                    nn.init.constant_(m.weight, 1.0)
-        else:
-            assert 'checkpoint' in self.init_cfg, f'Only support ' \
-                                                  f'specify `Pretrained` in ' \
-                                                  f'`init_cfg` in ' \
-                                                  f'{self.__class__.__name__} '
-            ckpt = _load_checkpoint(
-                self.init_cfg['checkpoint'], logger=logger, map_location='cpu')
+    def _freeze_stages(self):
+        for i in self.frozen_stages:
+            if i >= 0:
+                for param in self.stages[i].parameters():
+                    param.requires_grad = False
+
+    # def train(self, mode=True):
+    #     self._freeze_stages()
+    #     freeze_bn = False
+    #     super(MixFormer, self).train(mode)
+    #     if freeze_bn:
+    #         for m in self.model.modules():
+    #             if isinstance(m, nn.BatchNorm2d):
+    #                 m.eval()
+    #             if isinstance(m, nn.LayerNorm):
+    #                 m.eval()
+
                 
+    def init_weights(self):
+        pretrained = self.pretrained
+        if pretrained != None:
+            ckpt = torch.load(pretrained, map_location='cpu')
             if 'state_dict' in ckpt:
                 _state_dict = ckpt['state_dict']
             elif 'state_dict_ema' in ckpt:
@@ -864,20 +854,186 @@ class LeMeViT(BaseModule):
                 else:
                     state_dict[k] = v
 
-            # strip prefix of state_dict
+            # # strip prefix of state_dict
             if list(state_dict.keys())[0].startswith('module.'):
                 state_dict = {k[7:]: v for k, v in state_dict.items()}
 
+            # # delete attn_mask since we always re-init it
+            attn_mask_keys = [k for k in state_dict.keys() if "attn_mask" in k]
+            for k in attn_mask_keys:
+                del state_dict[k]
 
-            logger.info(self.load_state_dict(state_dict, False))
-        
-    def train(self, mode=True):
-        freeze_bn = False
-        super(LeMeViT, self).train(mode)
-        if freeze_bn:
-            for m in self.model.modules():
-                if isinstance(m, nn.BatchNorm2d):
-                    m.eval()
-                if isinstance(m, nn.LayerNorm):
-                    m.eval()
+            # load state_dict
+            self.load_state_dict(state_dict, False)
+            
 
+
+#################### model variants #######################
+
+
+@register_model
+def lemevit_tiny(pretrained=False, pretrained_cfg=None,
+                  pretrained_cfg_overlay=None, **kwargs):
+    model = LeMeViT(
+        depth=[1, 2, 2, 8, 2],
+        embed_dim=[64, 64, 128, 192, 320], 
+        head_dim=32,
+        mlp_ratios=[4, 4, 4, 4, 4],
+        attn_type=["C","D","D","S","S"],
+        queries_len=16,
+        qkv_bias=True,
+        qk_scale=None,
+        attn_drop=0.,
+        qk_dims=None,
+        cpe_ks=3,
+        pre_norm=True,
+        mlp_dwconv=False,
+        representation_size=None,
+        layer_scale_init_value=-1,
+        use_checkpoint_stages=[],
+        **kwargs)
+    model.default_cfg = _cfg()
+    
+    return model
+
+
+@register_model
+def lemevit_small(pretrained=False, pretrained_cfg=None,
+                  pretrained_cfg_overlay=None, **kwargs):
+    model = LeMeViT(
+        depth=[1, 2, 2, 6, 2],
+        embed_dim=[96, 96, 192, 320, 384], 
+        head_dim=32,
+        mlp_ratios=[4, 4, 4, 4, 4],
+        attn_type=["C","D","D","S","S"],
+        queries_len=16,
+        qkv_bias=True,
+        qk_scale=None,
+        attn_drop=0.,
+        qk_dims=None,
+        cpe_ks=3,
+        pre_norm=True,
+        mlp_dwconv=False,
+        representation_size=None,
+        layer_scale_init_value=-1,
+        use_checkpoint_stages=[],
+        **kwargs)
+    model.default_cfg = _cfg()
+
+    # if pretrained:
+    #     model_key = 'biformer_tiny_in1k'
+    #     url = model_urls[model_key]
+    #     checkpoint = torch.hub.load_state_dict_from_url(url=url, map_location="cpu", check_hash=True, file_name=f"{model_key}.pth")
+    #     model.load_state_dict(checkpoint["model"])
+
+    return model
+
+
+@register_model
+def lemevit_base(pretrained=False, pretrained_cfg=None,
+                  pretrained_cfg_overlay=None, **kwargs):
+    model = LeMeViT(
+        depth=[2, 4, 4, 18, 4],
+        embed_dim=[96, 96, 192, 384, 512], 
+        head_dim=32,
+        mlp_ratios=[4, 4, 4, 4, 4],
+        attn_type=["C","D","D","S","S"],
+        queries_len=16,
+        qkv_bias=True,
+        qk_scale=None,
+        attn_drop=0.,
+        qk_dims=None,
+        cpe_ks=3,
+        pre_norm=True,
+        mlp_dwconv=False,
+        representation_size=None,
+        layer_scale_init_value=-1,
+        use_checkpoint_stages=[],
+        **kwargs)
+    model.default_cfg = _cfg()
+
+    return model
+
+
+@register_model
+def lemevit_small_v2(pretrained=False, pretrained_cfg=None,
+                  pretrained_cfg_overlay=None, **kwargs):
+    model = LeMeViT(
+        depth=[1, 2, 2, 8, 2],
+        embed_dim=[64, 64, 128, 256, 512], 
+        head_dim=32,
+        mlp_ratios=[3, 3, 3, 3, 3],
+        attn_type=["C","D","D","S","S"], 
+        queries_len=16,
+        qkv_bias=True,
+        qk_scale=None,
+        attn_drop=0.,
+        qk_dims=None,
+        cpe_ks=3,
+        pre_norm=True,
+        mlp_dwconv=False,
+        representation_size=None,
+        layer_scale_init_value=-1,
+        use_checkpoint_stages=[],
+        **kwargs)
+    model.default_cfg = _cfg()
+
+    # if pretrained:
+    #     model_key = 'biformer_tiny_in1k'
+    #     url = model_urls[model_key]
+    #     checkpoint = torch.hub.load_state_dict_from_url(url=url, map_location="cpu", check_hash=True, file_name=f"{model_key}.pth")
+    #     model.load_state_dict(checkpoint["model"])
+
+    return model
+
+
+@register_model
+def lemevit_tiny_v2(pretrained=False, pretrained_cfg=None,
+                  pretrained_cfg_overlay=None, **kwargs):
+    model = LeMeViT(
+        depth=[2, 2, 2, 4, 2],
+        embed_dim=[96, 96, 192, 320, 384],
+        head_dim=32,
+        mlp_ratios=[4, 4, 4, 4, 4],
+        attn_type=["C","D2","D2","S","S"],
+        queries_len=16,
+        qkv_bias=True,
+        qk_scale=None,
+        attn_drop=0.,
+        qk_dims=None,
+        cpe_ks=3,
+        pre_norm=True,
+        mlp_dwconv=False,
+        representation_size=None,
+        layer_scale_init_value=-1,
+        use_checkpoint_stages=[],
+        **kwargs)
+    model.default_cfg = _cfg()
+    return model
+
+
+
+@register_model
+def vit_tiny(pretrained=False, pretrained_cfg=None,
+                  pretrained_cfg_overlay=None, **kwargs):
+    model = LeMeViT(
+        depth=[2, 2, 4, 2],
+        embed_dim=[96, 192, 320, 384], 
+        head_dim=32,
+        mlp_ratios=[4, 4, 4, 4],
+        attn_type=["S","S","S","S"],
+        queries_len=16,
+        qkv_bias=True,
+        qk_scale=None,
+        attn_drop=0.,
+        qk_dims=None,
+        cpe_ks=3,
+        pre_norm=True,
+        mlp_dwconv=False,
+        representation_size=None,
+        layer_scale_init_value=-1,
+        use_checkpoint_stages=[],
+        **kwargs)
+    model.default_cfg = _cfg()
+
+    return model
