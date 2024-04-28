@@ -102,36 +102,11 @@ class SNUNet_ECAM(nn.Module):
                             )
 
             filters0 = [96, 192, 384, 768]
-
-        elif args.backbone == 'vitae':
-
-            from .ViTAE_Window_NoShift.base_model import ViTAE_Window_NoShift_basic 
-
-            self.backbone = ViTAE_Window_NoShift_basic(args,
-                            RC_tokens_type=['swin', 'swin', 'transformer', 'transformer'], 
-                            NC_tokens_type=['swin', 'swin', 'transformer', 'transformer'], 
-                            stages=4, 
-                            embed_dims=[64, 64, 128, 256], 
-                            token_dims=[64, 128, 256, 512], 
-                            downsample_ratios=[4, 2, 2, 2],
-                            NC_depth=[2, 2, 8, 2], 
-                            NC_heads=[1, 2, 4, 8], 
-                            RC_heads=[1, 1, 2, 4], 
-                            mlp_ratio=4., 
-                            NC_group=[1, 32, 64, 128], 
-                            RC_group=[1, 16, 32, 64],
-                            img_size=1024, 
-                            window_size=8,
-                            frozen_stages=-1,
-                            norm_eval=False
-                            )
-
-            filters0 = [64, 128, 256, 512]
             
-        elif args.backbone == 'mixformer':
+        elif args.backbone == 'lemevit':
             
-            from .lemevit import mixformer_tiny
-            self.backbone = mixformer_tiny(pretrained=pretrained)
+            from .lemevit import lemevit_small
+            self.backbone = lemevit_small(pretrained=args.pretrained)
             
             filters0 = [96, 192, 320, 384]
         filters = [n1, n1 * 2, n1 * 4, n1 * 8, n1 * 16]
