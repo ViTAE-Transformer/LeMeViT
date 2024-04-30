@@ -6,12 +6,12 @@ workers: 4
 pin_mem: true
 
 # model
-model: mixformer_tiny
+model: lemevit_tiny
 drop: 0.0
 drop_path: 0.15
 
 # opt
-epochs: 300
+epochs: 280
 opt: adamw
 opt_eps: 1e-8
 opt_betas:
@@ -23,7 +23,7 @@ weight_decay: 0.05
 # sched
 sched: cosine
 lr_base: 5.0e-4
-min_lr: 1.0e-5
+min_lr: 5.0e-6
 warmup_lr: 1.0e-06
 warmup_epochs: 5
 
@@ -41,8 +41,8 @@ lr_noise_pct: 0.67
 lr_noise_std: 1.0
 
 decay_epochs: 30
-# cooldown_epochs: 10
-# patience_epochs: 10
+cooldown_epochs: 20
+patience_epochs: 20
 
 # amp
 amp: true

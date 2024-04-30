@@ -262,14 +262,14 @@ def validate(args):
 
     criterion = nn.CrossEntropyLoss().to(device)
 
-    root_dir = args.data or args.data_dir
     if args.input_img_mode is None:
         input_img_mode = 'RGB' if data_config['input_size'][0] == 3 else 'L'
     else:
         input_img_mode = args.input_img_mode
+    
     dataset = create_dataset(
-        root=root_dir,
-        name=args.dataset,
+        args.dataset,
+        root=args.data_dir,
         split=args.split,
         download=args.dataset_download,
         load_bytes=args.tf_preprocessing,
@@ -278,6 +278,8 @@ def validate(args):
         input_key=args.input_key,
         input_img_mode=input_img_mode,
         target_key=args.target_key,
+        is_training=False,
+        batch_size=args.batch_size
     )
 
     if args.valid_labels:
