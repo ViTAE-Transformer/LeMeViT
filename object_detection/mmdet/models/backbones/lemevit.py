@@ -803,7 +803,7 @@ class LeMeViT(nn.Module):
             for j, block in enumerate(self.stages[i]):
                 x, c = block(x, c)
             if i > 0:
-                out = self.extra_norms[i-1](x).contiguous()
+                out = x
                 outs.append(out)
         # x = self.norm(x)
         # x = self.pre_logits(x)

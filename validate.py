@@ -97,8 +97,8 @@ parser.add_argument('--crop-pct', default=None, type=float,
                     metavar='N', help='Input image center crop pct')
 parser.add_argument('--crop-mode', default=None, type=str,
                     metavar='N', help='Input image crop mode (squash, border, center). Model default if None.')
-# parser.add_argument('--crop-border-pixels', type=int, default=None,
-#                     help='Crop pixels from image border.')
+parser.add_argument('--crop-border-pixels', type=int, default=None,
+                    help='Crop pixels from image border.')
 parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
                     help='Override mean pixel value of dataset')
 parser.add_argument('--std', type=float,  nargs='+', default=None, metavar='STD',
@@ -262,14 +262,15 @@ def validate(args):
 
     criterion = nn.CrossEntropyLoss().to(device)
 
+
     if args.input_img_mode is None:
         input_img_mode = 'RGB' if data_config['input_size'][0] == 3 else 'L'
     else:
         input_img_mode = args.input_img_mode
     
     dataset = create_dataset(
-        args.dataset,
         root=args.data_dir,
+        name=args.dataset,
         split=args.split,
         download=args.dataset_download,
         load_bytes=args.tf_preprocessing,
@@ -305,7 +306,7 @@ def validate(args):
         num_workers=args.workers,
         crop_pct=crop_pct,
         crop_mode=data_config['crop_mode'],
-        # crop_border_pixels=args.crop_border_pixels,
+        crop_border_pixels=args.crop_border_pixels,
         pin_memory=args.pin_mem,
         device=device,
         tf_preprocessing=args.tf_preprocessing,

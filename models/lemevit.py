@@ -864,7 +864,11 @@ def lemevit_tiny(pretrained=False, pretrained_cfg=None,
         use_checkpoint_stages=[],
         **kwargs)
     model.default_cfg = _cfg()
-    
+
+    if pretrained:
+        checkpoint = torch.load(pretrained, map_location="cpu", check_hash=True)
+        model.load_state_dict(checkpoint["model"])
+
     return model
 
 
@@ -891,11 +895,9 @@ def lemevit_small(pretrained=False, pretrained_cfg=None,
         **kwargs)
     model.default_cfg = _cfg()
 
-    # if pretrained:
-    #     model_key = 'biformer_tiny_in1k'
-    #     url = model_urls[model_key]
-    #     checkpoint = torch.hub.load_state_dict_from_url(url=url, map_location="cpu", check_hash=True, file_name=f"{model_key}.pth")
-    #     model.load_state_dict(checkpoint["model"])
+    if pretrained:
+        checkpoint = torch.load(pretrained, map_location="cpu", check_hash=True)
+        model.load_state_dict(checkpoint["model"])
 
     return model
 
@@ -923,6 +925,10 @@ def lemevit_base(pretrained=False, pretrained_cfg=None,
         **kwargs)
     model.default_cfg = _cfg()
 
+    if pretrained:
+        checkpoint = torch.load(pretrained, map_location="cpu", check_hash=True)
+        model.load_state_dict(checkpoint["model"])
+
     return model
 
 
@@ -949,11 +955,9 @@ def lemevit_small_v2(pretrained=False, pretrained_cfg=None,
         **kwargs)
     model.default_cfg = _cfg()
 
-    # if pretrained:
-    #     model_key = 'biformer_tiny_in1k'
-    #     url = model_urls[model_key]
-    #     checkpoint = torch.hub.load_state_dict_from_url(url=url, map_location="cpu", check_hash=True, file_name=f"{model_key}.pth")
-    #     model.load_state_dict(checkpoint["model"])
+    if pretrained:
+        checkpoint = torch.load(pretrained, map_location="cpu", check_hash=True)
+        model.load_state_dict(checkpoint["model"])
 
     return model
 
@@ -980,6 +984,11 @@ def lemevit_tiny_v2(pretrained=False, pretrained_cfg=None,
         use_checkpoint_stages=[],
         **kwargs)
     model.default_cfg = _cfg()
+
+    if pretrained:
+        checkpoint = torch.load(pretrained, map_location="cpu", check_hash=True)
+        model.load_state_dict(checkpoint["model"])
+
     return model
 
 
@@ -1006,5 +1015,9 @@ def vit_tiny(pretrained=False, pretrained_cfg=None,
         use_checkpoint_stages=[],
         **kwargs)
     model.default_cfg = _cfg()
+
+    if pretrained:
+        checkpoint = torch.load(pretrained, map_location="cpu", check_hash=True)
+        model.load_state_dict(checkpoint["model"])
 
     return model
