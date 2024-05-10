@@ -1,9 +1,8 @@
 _base_ = [
-    '../_base_/models/upernet_lemevit_small.py', '../_base_/datasets/potsdam.py',
+    '../_base_/models/upernet_lemevit_base.py', '../_base_/datasets/potsdam.py',
     '../_base_/default_runtime.py', '../_base_/schedules/schedule_80k.py'
 ]
 model = dict(
-    pretrained='outputs/scene_recognition/mixformer_small_224/exp8/model_best.pth.tar',
     backbone=dict(),
     decode_head=dict(num_classes=5, ignore_index=5), 
     auxiliary_head=dict(num_classes=5, ignore_index=5)

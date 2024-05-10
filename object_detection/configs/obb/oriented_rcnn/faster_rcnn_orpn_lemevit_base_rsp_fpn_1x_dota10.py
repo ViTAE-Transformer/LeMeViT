@@ -13,7 +13,7 @@ evaluation = None
 
 model = dict(
     type='OrientedRCNN',
-    pretrained='outputs/scene_recognition/mixformer_base_224/exp1/model_best.pth.tar',
+    pretrained='outputs/classification/lemevit_base_224/exp-1-6/model_best.pth.tar',
     backbone=dict(
         type='LeMeViT',
         depth=[2, 4, 4, 18, 4],

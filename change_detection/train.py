@@ -64,7 +64,7 @@ opt.lr_base = 0.00012
 opt.num_workers = 8
 opt.loss_function = "bce"
 
-a = 6
+a = 2
 opt.batch_size *= a
 opt.lr_base *= a
 
