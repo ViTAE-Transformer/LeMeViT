@@ -1,0 +1,82 @@
+# data
+data_dir: ./datasets/UCM/images_train_test_val
+dataset: ucm
+num_classes: 51
+workers: 4
+pin_mem: true
+
+# model
+model: mixformer_tiny
+drop: 0.0
+drop_path: 0.1
+
+# opt
+epochs: 100
+opt: adamw
+opt_eps: 1e-8
+opt_betas:
+  - 0.9
+  - 0.999
+momentum: 0.9
+weight_decay: 0.05
+
+# sched
+sched: cosine
+lr_base: 5.0e-4
+min_lr: 5.0e-6
+warmup_lr: 1.0e-06
+warmup_epochs: 2
+weight_decay: 2.0e-05
+lr_base_scale: linear
+lr_base_size: 512
+auto_scale_warmup_min_lr: True
+
+# cosine sched
+lr_cycle_decay: 0.5
+lr_cycle_limit: 1
+lr_cycle_mul: 1.0
+lr_k_decay: 1.0
+lr_noise: null
+lr_noise_pct: 0.67
+lr_noise_std: 1.0
+cooldown_epochs: 0
+# patience_epochs: 10
+
+
+# amp
+amp: true
+amp_dtype: float16
+amp_impl: native
+
+# ema
+model_ema: false
+model_ema_decay: 0.99996
+model_ema_force_cpu: false
+
+# mixup
+mixup: 0.8
+cutmix: 1.0
+cutmix_minmax: null
+mixup_prob: 1.0
+mixup_switch_prob: 0.5
+mixup_mode: batch
+
+# others
+grad_accum_steps: 1
+clip_grad: null
+aa: rand-m9-mstd0.5-inc1
+color_jitter: 0.4
+decay_rate: 0.1
+smoothing: 0.1
+train_interpolation: bicubic
+repeated_aug: true
+reprob: 0.25
+remode: pixel
+recount: 1
+resplit: false
+
+# log
+# summary: torchinfo
+# benchmark: calflops
+
+
