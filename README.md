@@ -1,5 +1,5 @@
 <h1 align="center"> LeMeViT: Efficient Vision Transformer with Learnable Meta Tokens for Remote
-Sensing Image Interpretation <a href=""><img src="https://img.shields.io/badge/arXiv-Paper-<color>"></a> <a href=""><img src="https://img.shields.io/badge/IJCAI-2024-<>"></a> </h1>
+Sensing Image Interpretation <a href=""><img src="https://img.shields.io/badge/arXiv-Paper-<color>"></a> <a href=""><img src="https://img.shields.io/badge/IJCAI-2024-blue"></a> </h1>
 <p align="center">
 <h4 align="center">The official repo for [IJCAI'24] <a href="https://arxiv.org/abs/2305.01443">LeMeViT: Efficient Vision Transformer with Learnable Meta Tokens for Remote
 Sensing Image Interpretation</a>.</h4>
