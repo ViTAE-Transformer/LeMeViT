@@ -1,9 +1,9 @@
 <h1 align="center"> LeMeViT: Efficient Vision Transformer with Learnable Meta Tokens for Remote
 Sensing Image Interpretation <a href=""><img src="https://img.shields.io/badge/arXiv-Paper-<color>"></a> <a href=""><img src="https://img.shields.io/badge/IJCAI-2024-blue"></a> </h1>
 <p align="center">
-<h4 align="center">The official repo for [IJCAI'24] <a href="https://arxiv.org/abs/2305.01443">LeMeViT: Efficient Vision Transformer with Learnable Meta Tokens for Remote
+<h4 align="center">The official repo for [IJCAI'24] <a href="">LeMeViT: Efficient Vision Transformer with Learnable Meta Tokens for Remote
 Sensing Image Interpretation</a>.</h4>
-<h5 align="center"><em>Wentao Jiang, Jing Zhang, Di Wang, Zengmao Wang and Bo Du</em></h5>
+<h5 align="center"><em>Wentao Jiang, Jing Zhang, Di Wang, Qiming Zhang, Zengmao Wang and Bo Du</em></h5>
 <p align="center">
   <a href="#news">News</a> |
   <a href="#abstract">Abstract</a> |
@@ -15,7 +15,7 @@ Sensing Image Interpretation</a>.</h4>
 
 # News
 
-***15/05/2024***  
+***17/05/2024***  
 
 - The paper is post on arxiv now! The code is released.
 
@@ -39,10 +39,10 @@ Relevant Project:
 </figure>
 
 Here's the comparison of LemeViT with other state-of-the-arts on ImageNet-1K, <i> i.e. </i> 
-[**PVTv2**](), 
-[**Swin Transformer**](), 
-[**BiFormer**]() and 
-[**PacaViT**]().
+[**PVTv2**](https://arxiv.org/abs/2106.13797), 
+[**Swin Transformer**](https://arxiv.org/abs/2103.14030), 
+[**BiFormer**](https://arxiv.org/abs/2303.08810) and 
+[**PacaViT**](https://arxiv.org/abs/2203.11987).
 
 # Abstract
 
@@ -80,40 +80,40 @@ Here's the comparison of LemeViT with other state-of-the-arts on ImageNet-1K, <i
 
 ### Classfication
 
-|     Model     |  Resolution  | Throughput | Params |  MACs | Acc@1 | Weight |
-|:-------------:|:------------:|:----------:|:------:|:-----:|:-----:|:------:|
+|    Model     |  Resolution  | Throughput | Params |  MACs | Acc@1 | Weight |
+|:-------------|:------------:|:----------:|:------:|:-----:|:-----:|:------:|
 |  LeMeViT-Tiny |   224 × 224  |   5316.58  |  8.64  |  1.68 | 79.07 |    -   |
 | LeMeViT-Small |   224 × 224  |   3608.12  |  16.40 |  3.74 | 81.88 |    -   |
 |  LeMeViT-Base |   224 × 224  |   1482.70  |  53.10 | 11.06 | 84.35 |    -   |
 
 ### Scene Recognition
 
-|     Model     | Resolution | Throughput | Params |  MACs | Acc@1 | Weight |
-|:-------------:|:----------:|:----------:|:------:|:-----:|:-----:|:------:|
-|  LeMeViT-Tiny |   224 224  |   5327.47  |  8.33  |  1.78 | 98.80 |    -   |
-| LeMeViT-Small |   224 224  |   3612.68  |  16.04 |  3.74 | 99.00 |    -   |
-|  LeMeViT-Base |   224 224  |   1484.09  |  52.61 | 11.06 | 99.17 |    -   |
+|    Model     |  Resolution  | Throughput | Params |  MACs | Acc@1 | Weight |
+|:-------------|:------------:|:----------:|:------:|:-----:|:-----:|:------:|
+|  LeMeViT-Tiny |   224 × 224  |   5327.47  |  8.33  |  1.78 | 98.80 |    -   |
+| LeMeViT-Small |   224 × 224  |   3612.68  |  16.04 |  3.74 | 99.00 |    -   |
+|  LeMeViT-Base |   224 × 224  |   1484.09  |  52.61 | 11.06 | 99.17 |    -   |
 
 ### Object Detection
 
-|    Backbone   | Method         | Params |  MACs  |  mAP  | Weight |
-|:-------------:|----------------|:------:|:------:|:-----:|:------:|
+|   Backbone   | Method         | Params |  MACs  |  mAP  | Weight |
+|:-------------|----------------|:------:|:------:|:-----:|:------:|
 |  LeMeViT-Tiny | Oriented R-CNN |  25.37 | 154.12 | 76.63 |    -   |
 | LeMeViT-Small | Oriented R-CNN |  33.15 | 193.91 | 77.58 |    -   |
 |  LeMeViT-Base | Oriented R-CNN |  69.76 | 335.53 | 78.00 |    -   |
 
 ### Semantic Segmentation
 
-|    Backbone   | Method  | Params |  MACs  |   OA  | mF1   | Weight |
-|:-------------:|---------|:------:|:------:|:-----:|:-----:|:------:|
+|   Backbone   | Method  | Params |  MACs  |   OA  | mF1   | Weight |
+|:-------------|---------|:------:|:------:|:-----:|:-----:|:------:|
 |  LeMeViT-Tiny | UperNet |  37.05 | 217.88 | 91.03 | 90.55 |    -   |
 | LeMeViT-Small | UperNet |  45.59 | 228.16 | 91.23 | 90.62 |    -   |
 |  LeMeViT-Base | UperNet |  83.19 | 263.75 | 91.35 | 90.85 |    -   |
 
 ### Change Detection
 
-|    Backbone   | Method | Params |  MACs | F1 score | Weight |
-|:-------------:|:------:|:------:|:-----:|:--------:|:------:|
+|   Backbone   | Method | Params |  MACs | F1 score | Weight |
+|:-------------|:------:|:------:|:-----:|:--------:|:------:|
 |  LeMeViT-Tiny |   BIT  |  8.56  |  5.75 |   95.56  |    -   |
 | LeMeViT-Small |   BIT  |  16.75 | 10.71 |   96.64  |    -   |
 |  LeMeViT-Base |   BIT  |  53.34 | 28.47 |   97.32  |    -   |
@@ -206,7 +206,6 @@ Also, you can follow script [test.sh](scripts/test.sh) for recommended usage.
 The training script for both classication and scene recognition can be:
 
 ```
-OMP_NUM_THREADS=1 \
 CUDA_VISIBLE_DEVICES=<devices_ids> \
   torchrun \
     --rdzv_backend c10d \
@@ -272,7 +271,7 @@ bash scripts/train_cd.sh
 # Statement
 
 ## Acknowledgement
-This repository is built using the [timm](https://github.com/rwightman/pytorch-image-models) library.
+This repository is built using the [timm](https://github.com/rwightman/pytorch-image-models), [OBBDetection](https://github.com/jbwang1997/OBBDetection) and [mmsegmenation](https://github.com/open-mmlab/mmsegmentation) library.
 
 
 ## License
