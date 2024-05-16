@@ -15,10 +15,6 @@ Sensing Image Interpretation</a>.</h4>
 
 # News
 
-***17/05/2024***  
-
-- The paper is post on arxiv now! The code is released.
-
 ***17/04/2024***
 
 - :tada: :tada: LeMeViT is accepted by IJCAI 2024! :tada: :tada:
@@ -284,7 +280,7 @@ If you find LeMeViT helpful, please consider giving this repo a star :star: and 
 ```
 @inproceedings{jiang_lemevit_2024,
   title={LeMeViT: Efficient Vision Transformer with Learnable Meta Tokens for Remote Sensing Image Interpretation},
-  author={Wentao Jiang, Jing Zhang, Di Wang, Zengmao Wang, Bo Du},
+  author={Wentao Jiang, Jing Zhang, Di Wang, Qiming Zhang, Zengmao Wang, Bo Du},
   booktitle={International Joint Conference on Artificial  Intelligence},
   year={2024}
 }
