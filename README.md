@@ -1,7 +1,7 @@
 <h1 align="center"> LeMeViT: Efficient Vision Transformer with Learnable Meta Tokens for Remote
-Sensing Image Interpretation <a href=""><img src="https://img.shields.io/badge/arXiv-Paper-<color>"></a> <a href=""><img src="https://img.shields.io/badge/IJCAI-2024-blue"></a> </h1>
+Sensing Image Interpretation <a href="https://arxiv.org/abs/2405.09789"><img src="https://img.shields.io/badge/arXiv-Paper-<color>"></a> <a href=""><img src="https://img.shields.io/badge/IJCAI-2024-blue"></a> </h1>
 <p align="center">
-<h4 align="center">The official repo for [IJCAI'24] <a href="">LeMeViT: Efficient Vision Transformer with Learnable Meta Tokens for Remote
+<h4 align="center">The official repo for [IJCAI'24] <a href="https://arxiv.org/abs/2405.09789">LeMeViT: Efficient Vision Transformer with Learnable Meta Tokens for Remote
 Sensing Image Interpretation</a>.</h4>
 <h5 align="center"><em>Wentao Jiang, Jing Zhang, Di Wang, Qiming Zhang, Zengmao Wang and Bo Du</em></h5>
 <p align="center">
@@ -14,6 +14,10 @@ Sensing Image Interpretation</a>.</h4>
 </p>
 
 # News
+
+***17/05/2024***  
+
+- :rocket: The paper is post on arxiv now! The code is released.
 
 ***17/04/2024***
 
