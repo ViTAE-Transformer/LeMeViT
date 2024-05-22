@@ -283,9 +283,9 @@ If you find LeMeViT helpful, please consider giving this repo a star :star: and 
 
 ```
 @inproceedings{jiang_lemevit_2024,
-  title={LeMeViT: Efficient Vision Transformer with Learnable Meta Tokens for Remote Sensing Image Interpretation},
-  author={Wentao Jiang, Jing Zhang, Di Wang, Qiming Zhang, Zengmao Wang, Bo Du},
-  booktitle={International Joint Conference on Artificial  Intelligence},
+  title={{LeMeViT}: Efficient Vision Transformer with Learnable Meta Tokens for Remote Sensing Image Interpretation},
+  author={Jiang, Wentao and Zhang, Jing and Wang, Di and Zhang, Qiming and  Wang, Zengmao and Du, Bo},
+  booktitle={International Joint Conference on Artificial Intelligence},
   year={2024}
 }
 ```
